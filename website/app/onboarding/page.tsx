@@ -475,8 +475,8 @@ function OnboardingContent() {
                 <h2 className="font-black text-white">Portfolio Rebalance Frequency</h2>
               </div>
               <p className="text-xs text-genius-muted mb-5">How often the AI reviews and rebalances overall portfolio allocation.</p>
-              <div className="grid grid-cols-4 gap-3">
-                {["Daily", "Weekly", "Bi-weekly", "Monthly"].map((f) => (
+              <div className="grid grid-cols-5 gap-3">
+                {["Daily", "Weekly", "Bi-weekly", "Monthly", "One-time"].map((f) => (
                   <button
                     key={f}
                     onClick={() => setRebalance(f.toLowerCase())}
