@@ -94,22 +94,73 @@ const FEATURES = [
 
 const PLANS = [
   {
+    name: "Analyst",
+    slug: "analyst",
+    price: "10",
+    priceCents: "",
+    period: "month",
+    highlight: false,
+    badge: "",
+    description: "AI intelligence in your hands. You decide when to pull the trigger.",
+    features: [
+      "AI market analysis & recommendations",
+      "Plain-English trade reasoning",
+      "Live market data & watchlist",
+      "Up to 10 monitored assets",
+      "Email alerts on signals",
+      "Manual execution — you place trades",
+      "Portfolio performance tracker",
+    ],
+    missing: [
+      "Auto-investing bot",
+      "Crypto trading",
+      "Multi-portfolio management",
+    ],
+  },
+  {
     name: "Genius",
-    price: "14.99",
+    slug: "genius",
+    price: "29",
+    priceCents: ".99",
     period: "month",
     highlight: true,
-    badge: "Founding Member",
+    badge: "Most Popular",
+    description: "The full AI auto-investor. Set it, forget it, profit.",
     features: [
-      "Full AI auto-investing engine",
-      "Live market data & alerts",
-      "Transparent trade reasoning",
-      "Bot on/off manual mode",
-      "All asset classes (stocks, ETFs, crypto)",
+      "Everything in Analyst",
+      "Full AI auto-investing bot (24/7)",
+      "Stocks + ETFs automated trading",
+      "Bot on/off manual override",
       "Risk profile customization",
-      "Priority notifications",
+      "Push + email alerts on every trade",
       "Portfolio analytics dashboard",
-      "Email & push trade alerts",
+      "Unlimited monitored assets",
     ],
+    missing: [
+      "Crypto trading",
+      "Multi-portfolio management",
+    ],
+  },
+  {
+    name: "Elite",
+    slug: "elite",
+    price: "49",
+    priceCents: ".99",
+    period: "month",
+    highlight: false,
+    badge: "Most Powerful",
+    description: "Institutional-grade AI. Every market, every edge, 24/7.",
+    features: [
+      "Everything in Genius",
+      "Crypto trading (BTC, ETH, SOL + more)",
+      "Multi-portfolio management",
+      "Options flow & dark pool signals",
+      "Priority trade execution",
+      "Weekly AI market briefing",
+      "Early access to new features",
+      "VIP priority support",
+    ],
+    missing: [],
   },
 ];
 
@@ -222,7 +273,7 @@ export default function HomePage() {
                 href="/auth?mode=signup"
                 className="btn-genius px-5 py-2 rounded-lg text-sm font-bold"
               >
-                Claim Founding Access
+                Get Started Free
               </Link>
             </div>
 
@@ -250,7 +301,7 @@ export default function HomePage() {
               </a>
             ))}
             <Link href="/auth?mode=signup" className="btn-genius px-5 py-3 rounded-lg text-center font-bold">
-              Claim Founding Access
+              Get Started Free
             </Link>
           </div>
         )}
@@ -310,7 +361,7 @@ export default function HomePage() {
                   href="/auth?mode=signup"
                   className="btn-genius px-8 py-4 rounded-xl text-base font-black flex items-center justify-center gap-2"
                 >
-                  Claim Founding Access
+                  Get Started Free
                   <ChevronRight size={18} />
                 </Link>
                 <a
@@ -567,47 +618,82 @@ export default function HomePage() {
 
       {/* ── PRICING ── */}
       <section id="pricing" className="py-24 px-4">
-        <div className="max-w-2xl mx-auto text-center">
-          <p className="text-genius-green font-mono text-sm font-bold mb-3">PRICING</p>
-          <h2 className="text-4xl font-black text-white mb-4">
-            One Price. <span className="text-genius-green">Genius Included.</span>
-          </h2>
-          <p className="text-genius-text mb-12">
-            Reserved for serious investors only. First 500 founding members lock in this rate forever.
-          </p>
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <p className="text-genius-green font-mono text-sm font-bold mb-3">PRICING</p>
+            <h2 className="text-4xl font-black text-white mb-4">
+              Pick Your Edge. <span className="text-genius-green">All Plans Include AI.</span>
+            </h2>
+            <p className="text-genius-text">
+              Start free for 7 days. No credit card required. Cancel anytime.
+            </p>
+          </div>
 
-          <div className="genius-card rounded-3xl p-8 border border-genius-green/40 shadow-genius-strong relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-genius-green to-transparent" />
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <div className="inline-block px-3 py-1 bg-genius-green/20 border border-genius-green/30 rounded-full text-genius-green text-xs font-bold">
-                FOUNDING MEMBER RATE
-              </div>
-              <div className="inline-block px-3 py-1 bg-yellow-500/10 border border-yellow-500/30 rounded-full text-yellow-400 text-xs font-bold">
-                LOCKS IN FOREVER
-              </div>
-            </div>
-            <div className="mb-2">
-              <span className="text-6xl font-black text-white">$14</span>
-              <span className="text-3xl font-black text-genius-green">.99</span>
-              <span className="text-genius-muted text-lg">/month</span>
-            </div>
-            <p className="text-xs text-genius-muted mb-6">Price goes up at 500 members. You lock in $14.99 permanently.</p>
-            <div className="flex flex-col gap-3 mb-8 text-left">
-              {PLANS[0].features.map((f, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <CheckCircle size={16} className="text-genius-green flex-shrink-0" />
-                  <span className="text-genius-text text-sm">{f}</span>
+          <div className="grid md:grid-cols-3 gap-6 items-stretch">
+            {PLANS.map((plan) => (
+              <div
+                key={plan.slug}
+                className={`genius-card rounded-3xl p-8 border relative overflow-hidden flex flex-col ${
+                  plan.highlight
+                    ? "border-genius-green/60 shadow-genius-strong scale-105"
+                    : "border-genius-border"
+                }`}
+              >
+                {plan.highlight && (
+                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-genius-green to-transparent" />
+                )}
+
+                {plan.badge && (
+                  <div className={`inline-block self-start px-3 py-1 rounded-full text-xs font-bold mb-4 ${
+                    plan.highlight
+                      ? "bg-genius-green/20 border border-genius-green/30 text-genius-green"
+                      : "bg-white/5 border border-white/10 text-genius-muted"
+                  }`}>
+                    {plan.badge.toUpperCase()}
+                  </div>
+                )}
+                {!plan.badge && <div className="mb-8" />}
+
+                <h3 className="text-2xl font-black text-white mb-1">{plan.name}</h3>
+                <p className="text-xs text-genius-muted mb-6 leading-relaxed">{plan.description}</p>
+
+                <div className="mb-8">
+                  <span className="text-5xl font-black text-white">${plan.price}</span>
+                  {plan.priceCents && (
+                    <span className="text-2xl font-black text-genius-green">{plan.priceCents}</span>
+                  )}
+                  <span className="text-genius-muted">/month</span>
                 </div>
-              ))}
-            </div>
-            <Link
-              href="/auth?mode=signup"
-              className="btn-genius w-full py-4 rounded-xl font-black text-base flex items-center justify-center gap-2"
-            >
-              Claim Founding Access — 7 Days Free
-              <ArrowUpRight size={18} />
-            </Link>
-            <p className="text-xs text-genius-muted mt-3">No credit card required for trial. Lock in $14.99 forever. Cancel anytime.</p>
+
+                <div className="flex flex-col gap-2.5 mb-8 flex-1">
+                  {plan.features.map((f, i) => (
+                    <div key={i} className="flex items-start gap-3">
+                      <CheckCircle size={14} className="text-genius-green flex-shrink-0 mt-0.5" />
+                      <span className="text-genius-text text-sm">{f}</span>
+                    </div>
+                  ))}
+                  {plan.missing.map((f, i) => (
+                    <div key={i} className="flex items-start gap-3 opacity-30">
+                      <div className="w-3.5 h-3.5 rounded-full border border-genius-muted flex-shrink-0 mt-0.5" />
+                      <span className="text-genius-muted text-sm line-through">{f}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <Link
+                  href={`/auth?mode=signup&plan=${plan.slug}`}
+                  className={`w-full py-3.5 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all ${
+                    plan.highlight
+                      ? "btn-genius"
+                      : "border border-genius-border text-genius-text hover:border-genius-green hover:text-genius-green"
+                  }`}
+                >
+                  {plan.highlight ? "Start Free Trial" : "Get Started"}
+                  <ArrowUpRight size={16} />
+                </Link>
+                <p className="text-xs text-genius-muted mt-3 text-center">7-day free trial · cancel anytime</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -674,16 +760,24 @@ export default function HomePage() {
             Ready to Invest<br />Like a <span className="text-genius-green glow-text">Genius?</span>
           </h2>
           <p className="text-genius-text text-lg mb-8">
-            Only 500 founding member spots available. Lock in $14.99/month forever — price increases after that.
+            Start with AI-powered insights at $10/mo, or let the bot fully automate your portfolio from $29.99.
           </p>
-          <Link
-            href="/auth?mode=signup"
-            className="btn-genius inline-flex items-center gap-2 px-10 py-5 rounded-xl text-lg font-black"
-          >
-            Claim Your Founding Rate — Free for 7 Days
-            <ChevronRight size={22} />
-          </Link>
-          <p className="text-xs text-genius-muted mt-4">No credit card required. Cancel anytime before trial ends.</p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link
+              href="/auth?mode=signup&plan=genius"
+              className="btn-genius inline-flex items-center gap-2 px-10 py-5 rounded-xl text-lg font-black"
+            >
+              Start Free — Genius Plan
+              <ChevronRight size={22} />
+            </Link>
+            <Link
+              href="#pricing"
+              className="inline-flex items-center gap-2 px-10 py-5 rounded-xl text-base font-bold border border-genius-border text-genius-text hover:border-genius-green hover:text-genius-green transition-all"
+            >
+              Compare Plans
+            </Link>
+          </div>
+          <p className="text-xs text-genius-muted mt-4">No credit card required. Cancel anytime.</p>
         </div>
       </section>
 
