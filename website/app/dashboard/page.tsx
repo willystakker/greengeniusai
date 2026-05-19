@@ -83,7 +83,7 @@ export default function DashboardPage() {
     setBotActive(user.botActive ?? true);
   }, [router]);
 
-  const handleSignOut = () => { clearUser(); router.push("/"); };
+  const handleSignOut = async () => { await clearUser(); router.push("/"); };
 
   // Live portfolio tick
   useEffect(() => {

@@ -1,5 +1,7 @@
-// Simple client-side auth state — persists across refreshes via localStorage.
-// Swap this out for Supabase once you have your API keys.
+// Client-side auth state.
+// localStorage stores display info only (name, email, plan UI).
+// Real auth is enforced server-side via the HTTP-only ggai_session cookie
+// set by /api/auth — middleware protects /dashboard using that cookie.
 
 export interface User {
   id: string;
@@ -23,8 +25,14 @@ export function getUser(): User | null {
   return raw ? JSON.parse(raw) : null;
 }
 
-export function clearUser() {
+/** Signs out: clears localStorage AND revokes the HTTP-only session cookie. */
+export async function clearUser() {
   if (typeof window !== "undefined") localStorage.removeItem(KEY);
+  try {
+    await fetch("/api/auth", { method: "DELETE" });
+  } catch {
+    // Best-effort — cookie will expire naturally
+  }
 }
 
 export function isLoggedIn(): boolean {
