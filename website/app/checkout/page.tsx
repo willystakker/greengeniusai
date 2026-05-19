@@ -73,17 +73,23 @@ function CheckoutContent() {
               </div>
               <div>
                 <p className="font-black text-white text-lg">GreenGeniusAI</p>
-                <p className="text-xs text-genius-muted">Genius Plan</p>
+                <p className="text-xs text-genius-muted">Founding Member Access</p>
               </div>
             </div>
 
             <div className="mb-6">
-              <span className="text-5xl font-black text-white">$8</span>
+              <span className="text-5xl font-black text-white">$14</span>
               <span className="text-3xl font-black text-genius-green">.99</span>
               <span className="text-genius-muted">/month</span>
-              <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 bg-genius-green/10 border border-genius-green/30 rounded-full">
-                <Zap size={12} className="text-genius-green" />
-                <span className="text-xs font-bold text-genius-green">7-DAY FREE TRIAL</span>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-genius-green/10 border border-genius-green/30 rounded-full">
+                  <Zap size={12} className="text-genius-green" />
+                  <span className="text-xs font-bold text-genius-green">7-DAY FREE TRIAL</span>
+                </div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-yellow-500/10 border border-yellow-500/30 rounded-full">
+                  <Lock size={12} className="text-yellow-400" />
+                  <span className="text-xs font-bold text-yellow-400">LOCKED IN FOREVER</span>
+                </div>
               </div>
             </div>
 
@@ -108,9 +114,9 @@ function CheckoutContent() {
 
           {/* Right — checkout form */}
           <div>
-            <h1 className="text-2xl font-black text-white mb-2">Start Your Free Trial</h1>
+            <h1 className="text-2xl font-black text-white mb-2">Claim Founding Member Access</h1>
             <p className="text-genius-muted text-sm mb-6">
-              7 days free, then $8.99/month. Cancel anytime before trial ends and you won't be charged.
+              7 days free, then $14.99/month — locked in at this rate forever. Price increases after 500 members.
             </p>
 
             {cancelled && (
@@ -153,7 +159,7 @@ function CheckoutContent() {
                 {loading ? (
                   <span className="animate-pulse">Redirecting to secure checkout...</span>
                 ) : (
-                  "Start Free Trial — $8.99/mo after →"
+                  "Claim Founding Access — $14.99/mo after →"
                 )}
               </button>
 

@@ -9,20 +9,22 @@ import {
   Activity, AlertTriangle, Eye, Settings
 } from "lucide-react";
 
-// ─── Live ticker data (would be real API in production) ─────────────────────
-const TICKER_DATA = [
-  { sym: "AAPL", price: "189.42", change: "+2.14%", up: true },
-  { sym: "NVDA", price: "875.39", change: "+4.82%", up: true },
-  { sym: "TSLA", price: "248.11", change: "-1.23%", up: false },
-  { sym: "MSFT", price: "414.67", change: "+1.07%", up: true },
-  { sym: "BTC", price: "68,240", change: "+3.41%", up: true },
-  { sym: "ETH", price: "3,812", change: "+2.97%", up: true },
-  { sym: "SPY", price: "528.44", change: "+0.84%", up: true },
-  { sym: "AMZN", price: "186.22", change: "-0.41%", up: false },
-  { sym: "GOOGL", price: "170.58", change: "+1.55%", up: true },
-  { sym: "META", price: "528.11", change: "+2.08%", up: true },
-  { sym: "SOL", price: "178.44", change: "+5.11%", up: true },
-  { sym: "QQQ", price: "455.78", change: "+0.92%", up: true },
+// ─── Ticker type ─────────────────────────────────────────────────────────────
+type Ticker = { sym: string; price: string; change: string; up: boolean };
+
+const FALLBACK_TICKERS: Ticker[] = [
+  { sym: "AAPL", price: "---", change: "---", up: true },
+  { sym: "NVDA", price: "---", change: "---", up: true },
+  { sym: "TSLA", price: "---", change: "---", up: false },
+  { sym: "MSFT", price: "---", change: "---", up: true },
+  { sym: "BTC",  price: "---", change: "---", up: true },
+  { sym: "ETH",  price: "---", change: "---", up: true },
+  { sym: "SOL",  price: "---", change: "---", up: true },
+  { sym: "SPY",  price: "---", change: "---", up: true },
+  { sym: "AMZN", price: "---", change: "---", up: false },
+  { sym: "GOOGL",price: "---", change: "---", up: true },
+  { sym: "META", price: "---", change: "---", up: true },
+  { sym: "AMD",  price: "---", change: "---", up: true },
 ];
 
 // ─── AI Trade log entries ────────────────────────────────────────────────────
@@ -93,10 +95,10 @@ const FEATURES = [
 const PLANS = [
   {
     name: "Genius",
-    price: "8.99",
+    price: "14.99",
     period: "month",
     highlight: true,
-    badge: "Most Popular",
+    badge: "Founding Member",
     features: [
       "Full AI auto-investing engine",
       "Live market data & alerts",
@@ -145,6 +147,23 @@ export default function HomePage() {
   const [activeTradeIdx, setActiveTradeIdx] = useState(0);
   const [botActive, setBotActive] = useState(true);
   const [portfolioValue, setPortfolioValue] = useState(12847.33);
+  const [tickerData, setTickerData] = useState<Ticker[]>(FALLBACK_TICKERS);
+
+  // Fetch live prices on mount and every 30 seconds
+  useEffect(() => {
+    const fetchTickers = async () => {
+      try {
+        const res = await fetch("/api/ticker");
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.length) setTickerData(data);
+        }
+      } catch {}
+    };
+    fetchTickers();
+    const iv = setInterval(fetchTickers, 30000);
+    return () => clearInterval(iv);
+  }, []);
 
   // Simulate live portfolio ticking
   useEffect(() => {
@@ -203,7 +222,7 @@ export default function HomePage() {
                 href="/auth?mode=signup"
                 className="btn-genius px-5 py-2 rounded-lg text-sm font-bold"
               >
-                Start Free Trial
+                Claim Founding Access
               </Link>
             </div>
 
@@ -231,7 +250,7 @@ export default function HomePage() {
               </a>
             ))}
             <Link href="/auth?mode=signup" className="btn-genius px-5 py-3 rounded-lg text-center font-bold">
-              Start Free Trial
+              Claim Founding Access
             </Link>
           </div>
         )}
@@ -241,7 +260,7 @@ export default function HomePage() {
       <div className="fixed top-16 left-0 right-0 z-40 bg-genius-card border-b border-genius-border py-2 overflow-hidden">
         <div className="ticker-wrapper">
           <div className="ticker-track">
-            {[...TICKER_DATA, ...TICKER_DATA].map((t, i) => (
+            {[...tickerData, ...tickerData].map((t, i) => (
               <span key={i} className="inline-flex items-center gap-2 mr-8">
                 <span className="font-mono font-bold text-xs text-white">{t.sym}</span>
                 <span className="font-mono text-xs text-genius-muted">${t.price}</span>
@@ -283,7 +302,7 @@ export default function HomePage() {
               </h1>
 
               <p className="text-lg text-genius-text leading-relaxed mb-8 max-w-lg">
-                GreenGeniusAI automatically detects the hottest trending assets, buys in at the perfect moment, and exits before the decline — then tells you <em>exactly</em> why it made every move. For $8.99/month.
+                GreenGeniusAI automatically detects the hottest trending assets, buys in at the perfect moment, and exits before the decline — then tells you <em>exactly</em> why it made every move. Founding member rate: $14.99/month.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 mb-10">
@@ -291,7 +310,7 @@ export default function HomePage() {
                   href="/auth?mode=signup"
                   className="btn-genius px-8 py-4 rounded-xl text-base font-black flex items-center justify-center gap-2"
                 >
-                  Start Your Free Trial
+                  Claim Founding Access
                   <ChevronRight size={18} />
                 </Link>
                 <a
@@ -554,19 +573,25 @@ export default function HomePage() {
             One Price. <span className="text-genius-green">Genius Included.</span>
           </h2>
           <p className="text-genius-text mb-12">
-            Less than a coffee a month for an AI that manages your entire investment portfolio.
+            Reserved for serious investors only. First 500 founding members lock in this rate forever.
           </p>
 
           <div className="genius-card rounded-3xl p-8 border border-genius-green/40 shadow-genius-strong relative overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-genius-green to-transparent" />
-            <div className="inline-block px-3 py-1 bg-genius-green/20 border border-genius-green/30 rounded-full text-genius-green text-xs font-bold mb-4">
-              MOST POPULAR
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <div className="inline-block px-3 py-1 bg-genius-green/20 border border-genius-green/30 rounded-full text-genius-green text-xs font-bold">
+                FOUNDING MEMBER RATE
+              </div>
+              <div className="inline-block px-3 py-1 bg-yellow-500/10 border border-yellow-500/30 rounded-full text-yellow-400 text-xs font-bold">
+                LOCKS IN FOREVER
+              </div>
             </div>
-            <div className="mb-6">
-              <span className="text-6xl font-black text-white">$8</span>
+            <div className="mb-2">
+              <span className="text-6xl font-black text-white">$14</span>
               <span className="text-3xl font-black text-genius-green">.99</span>
               <span className="text-genius-muted text-lg">/month</span>
             </div>
+            <p className="text-xs text-genius-muted mb-6">Price goes up at 500 members. You lock in $14.99 permanently.</p>
             <div className="flex flex-col gap-3 mb-8 text-left">
               {PLANS[0].features.map((f, i) => (
                 <div key={i} className="flex items-center gap-3">
@@ -579,10 +604,10 @@ export default function HomePage() {
               href="/auth?mode=signup"
               className="btn-genius w-full py-4 rounded-xl font-black text-base flex items-center justify-center gap-2"
             >
-              Start 7-Day Free Trial
+              Claim Founding Access — 7 Days Free
               <ArrowUpRight size={18} />
             </Link>
-            <p className="text-xs text-genius-muted mt-3">No credit card required for trial. Cancel anytime.</p>
+            <p className="text-xs text-genius-muted mt-3">No credit card required for trial. Lock in $14.99 forever. Cancel anytime.</p>
           </div>
         </div>
       </section>
@@ -649,16 +674,16 @@ export default function HomePage() {
             Ready to Invest<br />Like a <span className="text-genius-green glow-text">Genius?</span>
           </h2>
           <p className="text-genius-text text-lg mb-8">
-            Join thousands of investors letting AI work smarter with their money. Start your free 7-day trial today.
+            Only 500 founding member spots available. Lock in $14.99/month forever — price increases after that.
           </p>
           <Link
             href="/auth?mode=signup"
             className="btn-genius inline-flex items-center gap-2 px-10 py-5 rounded-xl text-lg font-black"
           >
-            Start Free — $8.99/mo After
+            Claim Your Founding Rate — Free for 7 Days
             <ChevronRight size={22} />
           </Link>
-          <p className="text-xs text-genius-muted mt-4">No credit card required. Cancel anytime.</p>
+          <p className="text-xs text-genius-muted mt-4">No credit card required. Cancel anytime before trial ends.</p>
         </div>
       </section>
 
