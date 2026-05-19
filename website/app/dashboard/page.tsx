@@ -1,0 +1,524 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Brain, TrendingUp, TrendingDown, DollarSign, Bell,
+  Settings, LogOut, BarChart3, RefreshCw, Plus,
+  ChevronRight, Activity, Shield, Eye, Zap, CheckCircle,
+  AlertTriangle, X, PieChart, List, ToggleLeft, ToggleRight
+} from "lucide-react";
+import {
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart as RPieChart, Pie, Cell
+} from "recharts";
+import { getUser, clearUser } from "@/lib/auth";
+
+// ─── Mock data (replace with real API calls) ────────────────────────────────
+const PORTFOLIO_HISTORY = [
+  { date: "Jan", value: 10000 },
+  { date: "Feb", value: 10420 },
+  { date: "Mar", value: 10180 },
+  { date: "Apr", value: 11200 },
+  { date: "May", value: 10950 },
+  { date: "Jun", value: 11800 },
+  { date: "Jul", value: 12400 },
+  { date: "Aug", value: 12100 },
+  { date: "Sep", value: 12847 },
+];
+
+const POSITIONS = [
+  { sym: "NVDA", name: "NVIDIA Corp", shares: 2.4, value: 2100.94, change: +4.82, weight: 16.3 },
+  { sym: "BTC", name: "Bitcoin", shares: 0.031, value: 2115.44, change: +3.41, weight: 16.5 },
+  { sym: "MSFT", name: "Microsoft", shares: 4.1, value: 1700.15, change: +1.07, weight: 13.2 },
+  { sym: "SOL", name: "Solana", shares: 9.7, value: 1730.88, change: +5.11, weight: 13.5 },
+  { sym: "AAPL", name: "Apple Inc", shares: 7.2, value: 1363.82, change: +2.14, weight: 10.6 },
+  { sym: "META", name: "Meta Platforms", shares: 1.8, value: 950.60, change: +2.08, weight: 7.4 },
+  { sym: "CASH", name: "Cash & Equiv", shares: 1, value: 885.50, change: 0, weight: 6.9 },
+];
+
+const RECENT_TRADES = [
+  { action: "BUY", sym: "NVDA", amount: 2100.94, time: "2m ago", confidence: 94, reason: "Earnings beat consensus by 18%. GPU demand from AI sector accelerating. RSI momentum continuation. Options flow 87% bullish." },
+  { action: "SELL", sym: "TSLA", amount: 1100.00, time: "14m ago", confidence: 81, reason: "Delivery miss signals demand softening. Margin compression trend. Moving avg crossover bearish. Exiting before further downside." },
+  { action: "BUY", sym: "BTC", amount: 850.00, time: "31m ago", confidence: 88, reason: "Halving cycle historically produces 6-18 month bull run. Institutional inflows at 3-month high. On-chain accumulation signal triggered." },
+  { action: "BUY", sym: "SOL", amount: 620.00, time: "1h ago", confidence: 79, reason: "Network activity up 44% MoM. Developer activity surging. Breakout above key resistance with volume confirmation." },
+  { action: "BUY", sym: "MSFT", amount: 1700.15, time: "3h ago", confidence: 86, reason: "Azure cloud revenue growth accelerating. Copilot AI monetization exceeding estimates. Strong institutional accumulation detected." },
+];
+
+const PIE_COLORS = ["#00FF41", "#00D97E", "#7FFF00", "#00BCD4", "#FFD700", "#FF6B6B", "#4A7A4A"];
+
+const AI_INSIGHTS = [
+  { type: "opportunity", icon: TrendingUp, text: "SMCI showing strong breakout pattern. Momentum indicators suggest 15-20% upside in next 5 days.", action: "Review Trade" },
+  { type: "warning", icon: AlertTriangle, text: "META position approaching overbought territory. Consider partial profit-taking above $540.", action: "Review" },
+  { type: "info", icon: Activity, text: "Fed meeting in 3 days. AI is reducing risk exposure by 12% as a precaution. Normal after announcement.", action: "Details" },
+];
+
+// ─── Custom tooltip ──────────────────────────────────────────────────────────
+function ChartTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-genius-card border border-genius-border rounded-lg px-3 py-2 text-xs">
+      <p className="text-genius-muted">{payload[0].payload.date}</p>
+      <p className="text-genius-green font-bold font-mono">${payload[0].value.toLocaleString()}</p>
+    </div>
+  );
+}
+
+// ─── Main Dashboard ──────────────────────────────────────────────────────────
+export default function DashboardPage() {
+  const router = useRouter();
+  const [botActive, setBotActive] = useState(true);
+  const [activeTab, setActiveTab] = useState<"positions" | "trades" | "insights">("positions");
+  const [portfolioValue, setPortfolioValue] = useState(12847.33);
+  const [selectedTrade, setSelectedTrade] = useState<(typeof RECENT_TRADES)[0] | null>(null);
+  const [riskLevel, setRiskLevel] = useState<"conservative" | "moderate" | "aggressive">("moderate");
+  const [notifications, setNotifications] = useState(3);
+  const [userName, setUserName] = useState("Investor");
+
+  useEffect(() => {
+    const user = getUser();
+    if (!user) { router.push("/auth"); return; }
+    setUserName(user.name || "Investor");
+    setRiskLevel(user.riskProfile || "moderate");
+    setBotActive(user.botActive ?? true);
+  }, [router]);
+
+  const handleSignOut = () => { clearUser(); router.push("/"); };
+
+  // Live portfolio tick
+  useEffect(() => {
+    const iv = setInterval(() => {
+      setPortfolioValue((v) => {
+        const delta = (Math.random() - 0.3) * 12;
+        return Math.max(11000, +(v + delta).toFixed(2));
+      });
+    }, 2500);
+    return () => clearInterval(iv);
+  }, []);
+
+  const gain = portfolioValue - 11000;
+  const gainPct = ((gain / 11000) * 100).toFixed(2);
+
+  return (
+    <div className="min-h-screen bg-genius-black text-genius-text flex">
+      {/* ── SIDEBAR ── */}
+      <aside className="w-64 border-r border-genius-border bg-genius-dark flex flex-col fixed top-0 left-0 bottom-0 z-30">
+        {/* Logo */}
+        <div className="p-5 border-b border-genius-border">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-genius-green flex items-center justify-center">
+              <Brain size={18} className="text-genius-black" />
+            </div>
+            <span className="font-black text-lg text-white">
+              Green<span className="text-genius-green">Genius</span>AI
+            </span>
+          </div>
+        </div>
+
+        {/* Bot Status */}
+        <div className="p-4 border-b border-genius-border">
+          <div className="genius-card rounded-xl p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-mono text-genius-muted">AI BOT STATUS</span>
+              <button
+                onClick={() => setBotActive(!botActive)}
+                className={`transition-colors ${botActive ? "text-genius-green" : "text-genius-muted"}`}
+              >
+                {botActive ? <ToggleRight size={24} /> : <ToggleLeft size={24} />}
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              {botActive ? (
+                <>
+                  <div className="live-dot" />
+                  <span className="text-xs font-bold text-genius-green font-mono">ACTIVE — AUTO-TRADING</span>
+                </>
+              ) : (
+                <>
+                  <div className="w-2 h-2 rounded-full bg-genius-muted" />
+                  <span className="text-xs font-bold text-genius-muted font-mono">MANUAL MODE</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Nav */}
+        <nav className="flex-1 p-4 flex flex-col gap-1">
+          {[
+            { icon: BarChart3, label: "Portfolio", active: true },
+            { icon: Activity, label: "Live Trades" },
+            { icon: Brain, label: "AI Insights" },
+            { icon: PieChart, label: "Allocation" },
+            { icon: Shield, label: "Risk Settings" },
+            { icon: Bell, label: "Alerts" },
+          ].map((item) => (
+            <button
+              key={item.label}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                item.active
+                  ? "bg-genius-green/10 text-genius-green border border-genius-green/20"
+                  : "text-genius-muted hover:text-white hover:bg-genius-card"
+              }`}
+            >
+              <item.icon size={16} />
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        {/* Risk Level */}
+        <div className="p-4 border-t border-genius-border">
+          <p className="text-xs text-genius-muted font-mono mb-2">RISK PROFILE</p>
+          <div className="flex gap-1">
+            {(["conservative", "moderate", "aggressive"] as const).map((r) => (
+              <button
+                key={r}
+                onClick={() => setRiskLevel(r)}
+                className={`flex-1 py-1.5 rounded text-xs font-bold transition-all capitalize ${
+                  riskLevel === r
+                    ? "bg-genius-green text-genius-black"
+                    : "bg-genius-border text-genius-muted hover:text-white"
+                }`}
+              >
+                {r === "conservative" ? "Low" : r === "moderate" ? "Med" : "High"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Bottom */}
+        <div className="p-4 border-t border-genius-border flex flex-col gap-1">
+          <button className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-genius-muted hover:text-white hover:bg-genius-card transition-all">
+            <Settings size={16} /> Settings
+          </button>
+          <button onClick={handleSignOut} className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-genius-muted hover:text-red-400 hover:bg-red-500/10 transition-all">
+            <LogOut size={16} /> Sign Out
+          </button>
+        </div>
+      </aside>
+
+      {/* ── MAIN CONTENT ── */}
+      <main className="ml-64 flex-1 p-6 space-y-6">
+        {/* Top bar */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-black text-white">Welcome back, {userName.split(" ")[0]}</h1>
+            <p className="text-xs text-genius-muted font-mono mt-0.5">Last synced: just now · {new Date().toLocaleDateString()}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button className="relative p-2 rounded-lg border border-genius-border hover:border-genius-green transition-colors">
+              <Bell size={18} className="text-genius-muted" />
+              {notifications > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-genius-green text-genius-black text-xs font-black rounded-full flex items-center justify-center">
+                  {notifications}
+                </span>
+              )}
+            </button>
+            <button className="px-4 py-2 rounded-lg btn-genius text-sm font-bold flex items-center gap-2">
+              <Plus size={14} /> Add Funds
+            </button>
+          </div>
+        </div>
+
+        {/* KPI Cards */}
+        <div className="grid grid-cols-4 gap-4">
+          {[
+            {
+              label: "Total Portfolio",
+              value: `$${portfolioValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              sub: `+${gainPct}% all time`,
+              up: true,
+              icon: DollarSign,
+            },
+            {
+              label: "Today's Gain",
+              value: "+$342.18",
+              sub: "+2.73% today",
+              up: true,
+              icon: TrendingUp,
+            },
+            {
+              label: "Open Positions",
+              value: "6",
+              sub: "across 2 asset classes",
+              up: null,
+              icon: List,
+            },
+            {
+              label: "AI Trades (30d)",
+              value: "47",
+              sub: "78.4% win rate",
+              up: true,
+              icon: Zap,
+            },
+          ].map((k, i) => (
+            <div key={i} className="genius-card rounded-xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs text-genius-muted font-mono">{k.label.toUpperCase()}</p>
+                <div className="w-8 h-8 rounded-lg bg-genius-green/10 flex items-center justify-center">
+                  <k.icon size={14} className="text-genius-green" />
+                </div>
+              </div>
+              <p className="text-2xl font-black text-white mb-1">{k.value}</p>
+              <p className={`text-xs font-mono ${k.up === true ? "text-genius-green" : k.up === false ? "text-red-400" : "text-genius-muted"}`}>
+                {k.sub}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* Chart + Pie row */}
+        <div className="grid grid-cols-3 gap-6">
+          {/* Area chart */}
+          <div className="col-span-2 genius-card rounded-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-white">Portfolio Growth</h2>
+              <div className="flex gap-1">
+                {["1W", "1M", "3M", "1Y", "ALL"].map((t) => (
+                  <button key={t} className={`px-2 py-1 rounded text-xs font-mono transition-colors ${t === "ALL" ? "bg-genius-green/20 text-genius-green" : "text-genius-muted hover:text-white"}`}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={PORTFOLIO_HISTORY}>
+                <defs>
+                  <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#00FF41" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#00FF41" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="date" tick={{ fill: "#4A7A4A", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "#4A7A4A", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                <Tooltip content={<ChartTooltip />} />
+                <Area type="monotone" dataKey="value" stroke="#00FF41" strokeWidth={2} fill="url(#greenGrad)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Allocation pie */}
+          <div className="genius-card rounded-xl p-5">
+            <h2 className="font-bold text-white mb-4">Allocation</h2>
+            <RPieChart width={180} height={150}>
+              <Pie data={POSITIONS.filter(p => p.sym !== "CASH")} cx={90} cy={70} innerRadius={45} outerRadius={70} paddingAngle={2} dataKey="weight">
+                {POSITIONS.filter(p => p.sym !== "CASH").map((_, i) => (
+                  <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                ))}
+              </Pie>
+            </RPieChart>
+            <div className="flex flex-col gap-1.5 mt-2">
+              {POSITIONS.slice(0, 5).map((p, i) => (
+                <div key={p.sym} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full" style={{ background: PIE_COLORS[i] }} />
+                    <span className="text-genius-muted font-mono">{p.sym}</span>
+                  </div>
+                  <span className="text-white font-mono">{p.weight}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* AI Insights banner */}
+        {botActive && (
+          <div className="genius-card rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Brain size={16} className="text-genius-green" />
+              <h2 className="font-bold text-white text-sm">AI Intelligence Feed</h2>
+              <div className="live-dot ml-auto" />
+              <span className="text-xs text-genius-green font-mono">LIVE</span>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {AI_INSIGHTS.map((ins, i) => (
+                <div key={i} className={`rounded-lg p-3 border text-xs ${
+                  ins.type === "opportunity" ? "border-genius-green/30 bg-genius-green/5" :
+                  ins.type === "warning" ? "border-yellow-500/30 bg-yellow-500/5" :
+                  "border-genius-border bg-genius-card"
+                }`}>
+                  <div className="flex items-start gap-2 mb-2">
+                    <ins.icon size={13} className={ins.type === "opportunity" ? "text-genius-green" : ins.type === "warning" ? "text-yellow-400" : "text-genius-muted"} />
+                    <p className="text-genius-text leading-relaxed">{ins.text}</p>
+                  </div>
+                  <button className="text-genius-green font-bold hover:underline">{ins.action} →</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tabs: Positions / Trades / Insights */}
+        <div className="genius-card rounded-xl overflow-hidden">
+          <div className="flex border-b border-genius-border">
+            {(["positions", "trades", "insights"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-5 py-3 text-sm font-semibold capitalize transition-colors ${
+                  activeTab === tab
+                    ? "text-genius-green border-b-2 border-genius-green bg-genius-green/5"
+                    : "text-genius-muted hover:text-white"
+                }`}
+              >
+                {tab === "positions" ? "Open Positions" : tab === "trades" ? "Recent AI Trades" : "AI Analysis"}
+              </button>
+            ))}
+          </div>
+
+          {/* Positions */}
+          {activeTab === "positions" && (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-genius-border">
+                  {["Asset", "Shares", "Value", "Change", "Weight", "Action"].map(h => (
+                    <th key={h} className="text-left px-4 py-3 text-xs text-genius-muted font-mono">{h.toUpperCase()}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {POSITIONS.map((p) => (
+                  <tr key={p.sym} className="border-b border-genius-border/50 hover:bg-genius-card transition-colors">
+                    <td className="px-4 py-3">
+                      <div>
+                        <p className="font-bold text-white font-mono">{p.sym}</p>
+                        <p className="text-xs text-genius-muted">{p.name}</p>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-genius-text">{p.shares}</td>
+                    <td className="px-4 py-3 font-mono font-bold text-white">${p.value.toLocaleString()}</td>
+                    <td className="px-4 py-3">
+                      <span className={`font-mono font-bold text-xs px-2 py-1 rounded ${p.change > 0 ? "bg-genius-green/10 text-genius-green" : p.change < 0 ? "bg-red-500/10 text-red-400" : "bg-genius-border text-genius-muted"}`}>
+                        {p.change > 0 ? "+" : ""}{p.change}%
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 h-1.5 bg-genius-border rounded-full overflow-hidden">
+                          <div className="h-full bg-genius-green rounded-full" style={{ width: `${p.weight}%` }} />
+                        </div>
+                        <span className="text-xs font-mono text-genius-muted">{p.weight}%</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {p.sym !== "CASH" && (
+                        <div className="flex gap-2">
+                          <button className="px-2 py-1 rounded bg-genius-green/10 text-genius-green text-xs font-bold border border-genius-green/20 hover:bg-genius-green/20">+</button>
+                          <button className="px-2 py-1 rounded bg-red-500/10 text-red-400 text-xs font-bold border border-red-500/20 hover:bg-red-500/20">−</button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* Trades */}
+          {activeTab === "trades" && (
+            <div className="p-4 flex flex-col gap-3">
+              {RECENT_TRADES.map((t, i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-4 p-4 rounded-xl border border-genius-border hover:border-genius-green/30 cursor-pointer transition-all"
+                  onClick={() => setSelectedTrade(t)}
+                >
+                  <div className={`px-3 py-1.5 rounded-lg text-xs font-black font-mono flex-shrink-0 ${t.action === "BUY" ? "bg-genius-green/20 text-genius-green border border-genius-green/30" : "bg-red-500/20 text-red-400 border border-red-500/30"}`}>
+                    {t.action}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-white">{t.sym}</span>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1">
+                          <div className="w-16 h-1.5 bg-genius-border rounded-full overflow-hidden">
+                            <div className="h-full bg-genius-green rounded-full" style={{ width: `${t.confidence}%` }} />
+                          </div>
+                          <span className="text-xs font-mono text-genius-green">{t.confidence}%</span>
+                        </div>
+                        <span className="text-xs font-mono font-bold text-white">${t.amount.toLocaleString()}</span>
+                        <span className="text-xs text-genius-muted font-mono">{t.time}</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-genius-text leading-relaxed line-clamp-1">{t.reason}</p>
+                  </div>
+                  <ChevronRight size={14} className="text-genius-muted flex-shrink-0 mt-1" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* AI Analysis */}
+          {activeTab === "insights" && (
+            <div className="p-6">
+              <div className="genius-card rounded-xl p-5 border border-genius-green/20 mb-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Brain size={18} className="text-genius-green" />
+                  <h3 className="font-bold text-white">Market Outlook — Today</h3>
+                  <span className="ml-auto text-xs text-genius-muted font-mono">Updated 2 min ago</span>
+                </div>
+                <p className="text-sm text-genius-text leading-relaxed">
+                  Markets are showing cautious optimism ahead of the Fed's next policy statement. Tech sector momentum remains strong, particularly AI-adjacent names. Crypto markets are in a mid-cycle consolidation phase after the recent halving — accumulation signals are favorable for BTC and SOL. GreenGeniusAI has increased tech weighting to 42% and reduced consumer discretionary exposure. Cash buffer held at 7% for opportunistic buys.
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                {[
+                  { label: "Market Sentiment", value: "Bullish", score: 72, color: "text-genius-green" },
+                  { label: "Volatility Index (VIX)", value: "Elevated", score: 58, color: "text-yellow-400" },
+                  { label: "AI Confidence", value: "High", score: 86, color: "text-genius-green" },
+                ].map((m, i) => (
+                  <div key={i} className="genius-card rounded-xl p-4 text-center">
+                    <p className="text-xs text-genius-muted font-mono mb-2">{m.label.toUpperCase()}</p>
+                    <p className={`text-2xl font-black mb-1 ${m.color}`}>{m.score}</p>
+                    <p className="text-xs text-genius-text">{m.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* Trade detail modal */}
+      {selectedTrade && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSelectedTrade(null)}>
+          <div className="genius-card rounded-2xl p-6 max-w-md w-full border border-genius-border glow-border" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-white text-lg">AI Trade Reasoning</h3>
+              <button onClick={() => setSelectedTrade(null)} className="text-genius-muted hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex items-center gap-3 mb-4">
+              <div className={`px-3 py-1.5 rounded-lg text-sm font-black font-mono ${selectedTrade.action === "BUY" ? "bg-genius-green/20 text-genius-green border border-genius-green/30" : "bg-red-500/20 text-red-400 border border-red-500/30"}`}>
+                {selectedTrade.action}
+              </div>
+              <div>
+                <p className="font-bold text-white">{selectedTrade.sym}</p>
+                <p className="text-xs text-genius-muted">{selectedTrade.time}</p>
+              </div>
+              <div className="ml-auto text-right">
+                <p className="font-black text-white font-mono">${selectedTrade.amount.toLocaleString()}</p>
+                <p className="text-xs text-genius-green font-mono">{selectedTrade.confidence}% confidence</p>
+              </div>
+            </div>
+            <div className="bg-genius-black rounded-xl p-4 border border-genius-border mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Brain size={14} className="text-genius-green" />
+                <span className="text-xs font-mono font-bold text-genius-green">AI REASONING</span>
+              </div>
+              <p className="text-sm text-genius-text leading-relaxed">{selectedTrade.reason}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-2 bg-genius-border rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-genius-green to-genius-emerald rounded-full" style={{ width: `${selectedTrade.confidence}%` }} />
+              </div>
+              <span className="text-xs font-mono text-genius-green font-bold">{selectedTrade.confidence}% confidence</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

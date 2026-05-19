@@ -1,0 +1,170 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --genius-green: #00FF41;
+  --genius-emerald: #00D97E;
+  --genius-black: #050A05;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #050A05;
+  color: #B8D4B8;
+  font-family: 'Inter', system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #050A05; }
+::-webkit-scrollbar-thumb { background: #1A2E1A; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #00FF41; }
+
+/* Green glow text */
+.glow-text {
+  text-shadow: 0 0 20px rgba(0, 255, 65, 0.6), 0 0 40px rgba(0, 255, 65, 0.3);
+}
+
+.glow-border {
+  box-shadow: 0 0 0 1px rgba(0, 255, 65, 0.3), 0 0 20px rgba(0, 255, 65, 0.1);
+}
+
+/* Matrix rain background effect */
+.matrix-bg {
+  position: relative;
+  overflow: hidden;
+}
+
+.matrix-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(0,255,65,0.06) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(0,217,126,0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(0,255,65,0.03) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Card hover effect */
+.genius-card {
+  background: linear-gradient(145deg, #0F1A0F, #0A120A);
+  border: 1px solid #1A2E1A;
+  transition: all 0.3s ease;
+}
+
+.genius-card:hover {
+  border-color: rgba(0, 255, 65, 0.3);
+  box-shadow: 0 0 30px rgba(0, 255, 65, 0.08);
+  transform: translateY(-2px);
+}
+
+/* Ticker animation */
+@keyframes ticker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.ticker-wrapper {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.ticker-track {
+  display: inline-flex;
+  animation: ticker 40s linear infinite;
+}
+
+/* Button */
+.btn-genius {
+  background: linear-gradient(135deg, #00FF41, #00D97E);
+  color: #050A05;
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+
+.btn-genius:hover {
+  box-shadow: 0 0 30px rgba(0, 255, 65, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Number counter animation */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.count-up {
+  animation: countUp 0.6s ease forwards;
+}
+
+/* Live dot */
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #00FF41;
+  box-shadow: 0 0 0 0 rgba(0, 255, 65, 0.4);
+  animation: pulse-ring 2s infinite;
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(0, 255, 65, 0.4); }
+  70% { box-shadow: 0 0 0 8px rgba(0, 255, 65, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 255, 65, 0); }
+}
+
+/* Toggle switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 52px;
+  height: 28px;
+}
+
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: #1A2E1A;
+  border: 1px solid #2A4A2A;
+  border-radius: 28px;
+  transition: 0.3s;
+}
+
+.toggle-slider:before {
+  content: '';
+  position: absolute;
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background: #4A7A4A;
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+input:checked + .toggle-slider {
+  background: rgba(0, 255, 65, 0.2);
+  border-color: #00FF41;
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(24px);
+  background: #00FF41;
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.6);
+}
