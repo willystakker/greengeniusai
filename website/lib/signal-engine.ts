@@ -155,5 +155,5 @@ export function getUniverseSymbols(groups: string[]): string[] {
   for (const g of groups) {
     for (const s of (UNIVERSE_SYMBOLS[g] ?? [])) syms.add(s);
   }
-  return [...syms];
+  return Array.from(syms);
 }
