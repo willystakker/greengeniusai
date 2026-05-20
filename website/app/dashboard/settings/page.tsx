@@ -5,6 +5,7 @@ import {
   User, CreditCard, Brain, Bell, Shield, ChevronRight,
   CheckCircle, ExternalLink, Zap, Globe, Lock,
   Activity, RefreshCw, TrendingUp, AlertTriangle, Cpu,
+  Link2, Eye, EyeOff, Wifi, WifiOff,
 } from "lucide-react";
 import Link from "next/link";
 import { getUser } from "@/lib/auth";
@@ -49,6 +50,18 @@ export default function SettingsPage() {
   // Notifications
   const [notifs, setNotifs] = useState({ email: true, sms: false, push: false, ai: true, trades: true, news: false });
 
+  // Broker / Alpaca
+  const [alpacaKey,      setAlpacaKey]      = useState("");
+  const [alpacaSecret,   setAlpacaSecret]   = useState("");
+  const [alpacaPaper,    setAlpacaPaper]    = useState(true);
+  const [showKey,        setShowKey]        = useState(false);
+  const [showSecret,     setShowSecret]     = useState(false);
+  const [brokerSaved,    setBrokerSaved]    = useState(false);
+  const [brokerSaving,   setBrokerSaving]   = useState(false);
+  const [brokerStatus,   setBrokerStatus]   = useState<"idle"|"testing"|"connected"|"error">("idle");
+  const [brokerError,    setBrokerError]    = useState("");
+  const [brokerPortfolio, setBrokerPortfolio] = useState<{value:number;cash:number;buyingPower:number}|null>(null);
+
   // AI Bot Config
   const [confidence,   setConfidence]   = useState<number>(80);
   const [frequency,    setFrequency]    = useState<RebalanceFrequency>("Weekly");
@@ -64,6 +77,10 @@ export default function SettingsPage() {
       setProfile(p => ({ ...p, name: user.name || "", email: user.email || "" }));
       setPlan((user as any).plan || "genius");
     }
+    // Load saved Alpaca keys from localStorage
+    setAlpacaKey(localStorage.getItem("ggai_alpaca_key") ?? "");
+    setAlpacaSecret(localStorage.getItem("ggai_alpaca_secret") ?? "");
+    setAlpacaPaper(localStorage.getItem("ggai_alpaca_paper") !== "false");
     const cfg = getBotConfig();
     setConfidence(cfg.confidenceThreshold);
     setFrequency(cfg.rebalanceFrequency);
@@ -76,6 +93,42 @@ export default function SettingsPage() {
       setLastSaved(new Date(cfg.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
     }
   }, []);
+
+  const handleSaveBroker = async () => {
+    setBrokerSaving(true);
+    localStorage.setItem("ggai_alpaca_key",    alpacaKey.trim());
+    localStorage.setItem("ggai_alpaca_secret", alpacaSecret.trim());
+    localStorage.setItem("ggai_alpaca_paper",  String(alpacaPaper));
+    setBrokerSaving(false);
+    setBrokerSaved(true);
+    setTimeout(() => setBrokerSaved(false), 3000);
+  };
+
+  const handleTestBroker = async () => {
+    if (!alpacaKey || !alpacaSecret) return;
+    setBrokerStatus("testing");
+    setBrokerError("");
+    try {
+      const res = await fetch("/api/bot/status", {
+        headers: {
+          "x-alpaca-key":    alpacaKey.trim(),
+          "x-alpaca-secret": alpacaSecret.trim(),
+          "x-alpaca-paper":  String(alpacaPaper),
+        },
+      });
+      const data = await res.json();
+      if (data.connected) {
+        setBrokerStatus("connected");
+        setBrokerPortfolio({ value: data.portfolio_value, cash: data.cash, buyingPower: data.buying_power });
+      } else {
+        setBrokerStatus("error");
+        setBrokerError(data.reason ?? "Connection failed");
+      }
+    } catch (e: any) {
+      setBrokerStatus("error");
+      setBrokerError(e.message);
+    }
+  };
 
   const toggleGroup = (g: AssetGroup) => {
     setUniverse(u => u.includes(g) ? (u.length > 1 ? u.filter(x => x !== g) : u) : [...u, g]);
@@ -122,6 +175,7 @@ export default function SettingsPage() {
 
   const SECTIONS = [
     { id: "ai",           icon: Brain,      label: "AI Configuration" },
+    { id: "broker",       icon: Link2,      label: "Connect Broker" },
     { id: "profile",      icon: User,       label: "Profile" },
     { id: "subscription", icon: CreditCard, label: "Subscription" },
     { id: "notifications",icon: Bell,       label: "Notifications" },
@@ -426,6 +480,167 @@ export default function SettingsPage() {
                 >
                   Launch Onboarding Wizard <ExternalLink size={12} />
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── BROKER CONNECTION ── */}
+          {section === "broker" && (
+            <div className="flex flex-col gap-4">
+              {/* Header */}
+              <div className="genius-card rounded-xl p-6">
+                <div className="flex items-center gap-2 mb-1">
+                  <Link2 size={16} className="text-genius-green" />
+                  <h2 className="font-bold text-white">Connect Your Broker</h2>
+                </div>
+                <p className="text-xs text-genius-muted mb-6">
+                  Link your Alpaca brokerage account so the AI bot can execute real trades on your behalf. Your keys are stored locally and never sent to our servers.
+                </p>
+
+                {/* Paper / Live toggle */}
+                <div className="flex items-center gap-3 mb-6 p-3 rounded-xl bg-genius-black border border-genius-border">
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-white">Trading Mode</p>
+                    <p className="text-xs text-genius-muted">Paper trading uses fake money — safe for testing.</p>
+                  </div>
+                  <div className="flex rounded-lg overflow-hidden border border-genius-border text-xs font-bold font-mono">
+                    <button
+                      onClick={() => setAlpacaPaper(true)}
+                      className={`px-4 py-2 transition-colors ${alpacaPaper ? "bg-genius-green text-genius-black" : "bg-genius-black text-genius-muted hover:text-white"}`}
+                    >
+                      PAPER
+                    </button>
+                    <button
+                      onClick={() => setAlpacaPaper(false)}
+                      className={`px-4 py-2 transition-colors ${!alpacaPaper ? "bg-red-500 text-white" : "bg-genius-black text-genius-muted hover:text-white"}`}
+                    >
+                      LIVE
+                    </button>
+                  </div>
+                </div>
+
+                {!alpacaPaper && (
+                  <div className="mb-5 flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-sm text-red-400">
+                    <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+                    <span>Live mode uses <strong>real money</strong>. The AI will place actual orders in your Alpaca account. Proceed only if you understand the risks.</span>
+                  </div>
+                )}
+
+                {/* API Key inputs */}
+                <div className="flex flex-col gap-4 mb-6">
+                  <div>
+                    <label className="text-xs text-genius-muted font-mono mb-1.5 block">ALPACA API KEY ID</label>
+                    <div className="relative">
+                      <input
+                        type={showKey ? "text" : "password"}
+                        value={alpacaKey}
+                        onChange={e => setAlpacaKey(e.target.value)}
+                        placeholder="PK..."
+                        className="w-full bg-genius-black border border-genius-border rounded-lg px-3 py-2.5 text-white text-sm font-mono focus:outline-none focus:border-genius-green transition-colors pr-10"
+                      />
+                      <button onClick={() => setShowKey(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-genius-muted hover:text-white">
+                        {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-genius-muted font-mono mb-1.5 block">ALPACA SECRET KEY</label>
+                    <div className="relative">
+                      <input
+                        type={showSecret ? "text" : "password"}
+                        value={alpacaSecret}
+                        onChange={e => setAlpacaSecret(e.target.value)}
+                        placeholder="••••••••••••••••••••••••••••••••••••••••"
+                        className="w-full bg-genius-black border border-genius-border rounded-lg px-3 py-2.5 text-white text-sm font-mono focus:outline-none focus:border-genius-green transition-colors pr-10"
+                      />
+                      <button onClick={() => setShowSecret(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-genius-muted hover:text-white">
+                        {showSecret ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status bar */}
+                {brokerStatus === "connected" && brokerPortfolio && (
+                  <div className="mb-5 p-4 rounded-xl bg-genius-green/10 border border-genius-green/30">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="live-dot" />
+                      <span className="text-sm font-bold text-genius-green">Connected — {alpacaPaper ? "Paper Account" : "Live Account"}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { label: "Portfolio Value", value: `$${brokerPortfolio.value.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}` },
+                        { label: "Cash Balance",    value: `$${brokerPortfolio.cash.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}` },
+                        { label: "Buying Power",    value: `$${brokerPortfolio.buyingPower.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}` },
+                      ].map(m => (
+                        <div key={m.label} className="text-center">
+                          <p className="text-xs text-genius-muted font-mono">{m.label}</p>
+                          <p className="text-base font-black text-genius-green">{m.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {brokerStatus === "error" && (
+                  <div className="mb-5 flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-sm text-red-400">
+                    <WifiOff size={14} className="mt-0.5 flex-shrink-0" />
+                    <span>Connection failed: {brokerError}</span>
+                  </div>
+                )}
+
+                {/* Buttons */}
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleSaveBroker}
+                    disabled={brokerSaving || !alpacaKey || !alpacaSecret}
+                    className="px-6 py-2.5 rounded-xl btn-genius text-sm font-black flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {brokerSaving ? (
+                      <><RefreshCw size={14} className="animate-spin" /> Saving...</>
+                    ) : brokerSaved ? (
+                      <><CheckCircle size={14} /> Keys Saved!</>
+                    ) : (
+                      <><Lock size={14} /> Save Keys Locally</>
+                    )}
+                  </button>
+                  <button
+                    onClick={handleTestBroker}
+                    disabled={brokerStatus === "testing" || !alpacaKey || !alpacaSecret}
+                    className="px-6 py-2.5 rounded-xl border border-genius-green/40 text-genius-green text-sm font-bold hover:bg-genius-green/10 transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {brokerStatus === "testing" ? (
+                      <><RefreshCw size={14} className="animate-spin" /> Testing...</>
+                    ) : brokerStatus === "connected" ? (
+                      <><Wifi size={14} /> Re-Test Connection</>
+                    ) : (
+                      <><Wifi size={14} /> Test Connection</>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* How to get keys */}
+              <div className="genius-card rounded-xl p-5 border border-genius-border">
+                <h3 className="font-bold text-white mb-3 text-sm">How to get your Alpaca API keys</h3>
+                <ol className="flex flex-col gap-2 text-sm text-genius-muted">
+                  {[
+                    <>Go to <a href="https://app.alpaca.markets" target="_blank" rel="noopener" className="text-genius-green hover:underline">app.alpaca.markets</a> and create a free account.</>,
+                    "Navigate to Paper Trading → API Keys (or Live Trading for real money).",
+                    'Click "Generate New Key" — copy both the Key ID and Secret Key.',
+                    "Paste them above, choose Paper or Live mode, then Save & Test.",
+                  ].map((step, i) => (
+                    <li key={i} className="flex gap-3">
+                      <span className="w-5 h-5 rounded-full bg-genius-green/20 text-genius-green text-xs font-black flex items-center justify-center flex-shrink-0 mt-0.5">{i+1}</span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+
+              {/* Security note */}
+              <div className="flex items-start gap-2 p-4 rounded-xl bg-genius-black border border-genius-border text-xs text-genius-muted">
+                <Lock size={12} className="mt-0.5 flex-shrink-0 text-genius-green" />
+                <span>Your API keys are stored only in your browser's localStorage. They are sent directly to Alpaca's servers and never stored on GreenGeniusAI servers.</span>
               </div>
             </div>
           )}
