@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import {
   Brain, TrendingUp, TrendingDown, Activity, AlertTriangle,
-  Globe, BarChart3, RefreshCw, ChevronUp, ChevronDown,
+  Globe, BarChart3, RefreshCw, ChevronUp, ChevronDown, Cpu,
 } from "lucide-react";
+import { getBotConfig, getActiveSymbols, type BotConfig } from "@/lib/bot-config";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip } from "recharts";
 
 const SIGNALS = [
@@ -63,11 +64,18 @@ export default function InsightsPage() {
   const [tab, setTab]       = useState<"signals"|"sectors"|"macro">("signals");
   const [lastUpdated, setLastUpdated] = useState("just now");
   const [refreshing, setRefreshing]   = useState(false);
+  const [botCfg,      setBotCfg]      = useState<BotConfig | null>(null);
+
+  useEffect(() => { setBotCfg(getBotConfig()); }, []);
 
   const handleRefresh = () => {
     setRefreshing(true);
+    setBotCfg(getBotConfig());
     setTimeout(() => { setRefreshing(false); setLastUpdated("just now"); }, 1200);
   };
+
+  const threshold  = botCfg?.confidenceThreshold ?? 80;
+  const activeSyms = botCfg ? new Set(getActiveSymbols(botCfg.assetUniverse)) : null;
 
   return (
     <div className="space-y-6">
@@ -115,6 +123,18 @@ export default function InsightsPage() {
         </div>
       </div>
 
+      {/* Active config bar */}
+      {botCfg && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-genius-green/20 bg-genius-green/5 text-xs font-mono">
+          <Cpu size={13} className="text-genius-green flex-shrink-0" />
+          <span className="text-genius-muted">Signals filtered by bot config:</span>
+          <span className="text-genius-green font-bold">≥{threshold}% confidence</span>
+          <span className="text-genius-muted">·</span>
+          <span className="text-genius-green font-bold">{botCfg.assetUniverse.join(", ")}</span>
+          <a href="/dashboard/settings" className="ml-auto text-genius-green hover:underline">Edit config →</a>
+        </div>
+      )}
+
       {/* Main content */}
       <div className="grid grid-cols-3 gap-6">
         {/* Left: Tabs */}
@@ -142,11 +162,22 @@ export default function InsightsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {SIGNALS.map(s => (
-                    <tr key={s.sym} className="border-b border-genius-border/40 hover:bg-genius-card transition-colors">
+                  {SIGNALS.map(s => {
+                    const inUniverse = !activeSyms || activeSyms.has(s.sym);
+                    const meetsThreshold = s.confidence >= threshold;
+                    const botWillTrade = inUniverse && meetsThreshold;
+                    return (
+                    <tr key={s.sym} className={`border-b border-genius-border/40 transition-colors ${botWillTrade ? "hover:bg-genius-card" : "opacity-45 hover:opacity-65"}`}>
                       <td className="px-4 py-3">
-                        <p className="font-bold text-white font-mono">{s.sym}</p>
-                        <p className="text-xs text-genius-muted">{s.name}</p>
+                        <div className="flex items-center gap-2">
+                          <div>
+                            <p className="font-bold text-white font-mono">{s.sym}</p>
+                            <p className="text-xs text-genius-muted">{s.name}</p>
+                          </div>
+                          {botWillTrade && (
+                            <span className="text-xs font-mono bg-genius-green/10 text-genius-green border border-genius-green/20 px-1.5 py-0.5 rounded ml-1">BOT</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`text-xs font-black font-mono px-2 py-1 rounded border ${RATING_COLOR[s.rating]}`}>{s.rating}</span>
@@ -165,9 +196,12 @@ export default function InsightsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <p className="text-xs text-genius-muted line-clamp-2 max-w-[220px]">{s.reason}</p>
+                        {!inUniverse && <p className="text-xs text-genius-muted/50 font-mono mt-0.5">Not in active universe</p>}
+                        {inUniverse && !meetsThreshold && <p className="text-xs text-yellow-400/70 font-mono mt-0.5">Below {threshold}% threshold</p>}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

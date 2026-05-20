@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { getBotConfig, nextRebalanceDate, type BotConfig } from "@/lib/bot-config";
 import { RefreshCw, TrendingUp, AlertTriangle, CheckCircle, Sliders } from "lucide-react";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
@@ -36,6 +37,13 @@ export default function AllocationPage() {
   const [driftThreshold, setDriftThreshold] = useState(5);
   const [autoRebalance,  setAutoRebalance]  = useState(true);
   const [rebalancing,    setRebalancing]    = useState(false);
+  const [botCfg,         setBotCfg]         = useState<BotConfig | null>(null);
+
+  useEffect(() => {
+    const cfg = getBotConfig();
+    setBotCfg(cfg);
+    setAutoRebalance(cfg.botActive);
+  }, []);
 
   const totalValue = POSITIONS.reduce((s, p) => s + p.value, 0);
 
@@ -59,6 +67,13 @@ export default function AllocationPage() {
           <p className="text-xs text-genius-muted font-mono mt-0.5">Target vs actual · Drift monitoring · Rebalance controls</p>
         </div>
         <div className="flex items-center gap-3">
+          {botCfg && (
+            <div className="flex items-center gap-2 text-xs font-mono text-genius-muted">
+              <span className="text-genius-green font-bold">{botCfg.rebalanceFrequency}</span>
+              <span>· Next:</span>
+              <span className="text-genius-green font-bold">{nextRebalanceDate(botCfg.rebalanceFrequency)}</span>
+            </div>
+          )}
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-genius-border">
             <span className="text-xs text-genius-muted font-mono">AUTO REBALANCE</span>
             <button

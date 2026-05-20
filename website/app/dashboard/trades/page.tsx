@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import {
   TrendingUp, TrendingDown, Activity, Filter, Download,
-  Brain, ChevronRight, X, CheckCircle, Clock, Zap,
+  Brain, ChevronRight, X, CheckCircle, Clock, Zap, Settings2,
 } from "lucide-react";
+import { getBotConfig, getActiveSymbols, type BotConfig } from "@/lib/bot-config";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell,
@@ -49,14 +50,28 @@ function CurveTip({ active, payload }: any) {
 }
 
 export default function TradesPage() {
-  const [filter, setFilter]   = useState<"ALL"|"BUY"|"SELL"|"OPEN"|"CLOSED">("ALL");
+  const [filter,   setFilter]   = useState<"ALL"|"BUY"|"SELL"|"OPEN"|"CLOSED">("ALL");
   const [selected, setSelected] = useState<(typeof ALL_TRADES)[0] | null>(null);
-  const [flash, setFlash]     = useState(false);
+  const [flash,    setFlash]    = useState(false);
+  const [botCfg,   setBotCfg]   = useState<BotConfig | null>(null);
 
   useEffect(() => {
+    setBotCfg(getBotConfig());
     const iv = setInterval(() => { setFlash(f => !f); }, 1500);
     return () => clearInterval(iv);
   }, []);
+
+  const threshold    = botCfg?.confidenceThreshold ?? 80;
+  const activeSyms   = botCfg ? getActiveSymbols(botCfg.assetUniverse) : null;
+
+  // Trades pass through if:
+  //  • confidence >= threshold
+  //  • symbol is in active universe (or activeSyms is not yet loaded)
+  const isEligible = (t: typeof ALL_TRADES[0]) => {
+    if (t.confidence < threshold) return false;
+    if (activeSyms && !activeSyms.includes(t.sym)) return false;
+    return true;
+  };
 
   const filtered = ALL_TRADES.filter(t => {
     if (filter === "BUY")    return t.action === "BUY";
@@ -86,6 +101,24 @@ export default function TradesPage() {
           <Download size={14} /> Export CSV
         </button>
       </div>
+
+      {/* Active config banner */}
+      {botCfg && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-genius-green/20 bg-genius-green/5 text-xs font-mono">
+          <Brain size={13} className="text-genius-green flex-shrink-0" />
+          <span className="text-genius-muted">Bot config active:</span>
+          <span className="text-genius-green font-bold">≥{threshold}% confidence</span>
+          <span className="text-genius-muted">·</span>
+          <span className="text-genius-green font-bold">{botCfg.rebalanceFrequency} rebalance</span>
+          <span className="text-genius-muted">·</span>
+          <span className="text-genius-green font-bold">{getActiveSymbols(botCfg.assetUniverse).length} symbols</span>
+          <span className="text-genius-muted">·</span>
+          <span className="text-genius-muted">Max {botCfg.maxPositions} positions</span>
+          <a href="/dashboard/settings" className="ml-auto flex items-center gap-1 text-genius-green hover:underline">
+            <Settings2 size={11} /> Edit
+          </a>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-4 gap-4">
@@ -175,13 +208,25 @@ export default function TradesPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map(t => (
-              <tr key={t.id} className="border-b border-genius-border/40 hover:bg-genius-card cursor-pointer transition-colors"
-                onClick={() => setSelected(t)}>
+            {filtered.map(t => {
+              const eligible = isEligible(t);
+              return (
+              <tr key={t.id}
+                className={`border-b border-genius-border/40 cursor-pointer transition-colors ${eligible ? "hover:bg-genius-card" : "opacity-40 hover:opacity-60"}`}
+                onClick={() => setSelected(t)}
+                title={!eligible ? (t.confidence < threshold ? `Below ${threshold}% confidence threshold` : "Symbol not in active universe") : ""}
+              >
                 <td className="px-4 py-3">
-                  <span className={`px-2.5 py-1 rounded text-xs font-black font-mono ${
-                    t.action==="BUY" ? "bg-genius-green/15 text-genius-green border border-genius-green/25" : "bg-red-500/15 text-red-400 border border-red-500/25"
-                  }`}>{t.action}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`px-2.5 py-1 rounded text-xs font-black font-mono ${
+                      t.action==="BUY" ? "bg-genius-green/15 text-genius-green border border-genius-green/25" : "bg-red-500/15 text-red-400 border border-red-500/25"
+                    }`}>{t.action}</span>
+                    {!eligible && (
+                      <span className="text-xs font-mono text-genius-muted/70 border border-genius-border rounded px-1">
+                        {t.confidence < threshold ? `below ${threshold}%` : "excluded"}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-3">
                   <p className="font-bold text-white font-mono text-sm">{t.sym}</p>
@@ -213,7 +258,8 @@ export default function TradesPage() {
                 <td className="px-4 py-3 text-xs text-genius-muted font-mono">{t.time}</td>
                 <td className="px-4 py-3"><ChevronRight size={14} className="text-genius-muted" /></td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

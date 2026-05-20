@@ -3,35 +3,60 @@
 import { useState, useEffect } from "react";
 import {
   User, CreditCard, Brain, Bell, Shield, ChevronRight,
-  CheckCircle, ExternalLink, Zap, Globe, Lock, LogOut,
+  CheckCircle, ExternalLink, Zap, Globe, Lock,
+  Activity, RefreshCw, TrendingUp, AlertTriangle, Cpu,
 } from "lucide-react";
 import Link from "next/link";
 import { getUser } from "@/lib/auth";
+import {
+  getBotConfig, saveBotConfig,
+  ASSET_SYMBOLS, ASSET_GROUP_META,
+  estimateTradesPerWeek, nextRebalanceDate,
+  type AssetGroup, type RebalanceFrequency, type BotConfig,
+} from "@/lib/bot-config";
+
+const ALL_GROUPS: AssetGroup[] = [
+  "US Tech Stocks","Crypto Assets","Index ETFs","High-Growth","Global Equities","Commodities",
+];
 
 const PLAN_FEATURES: Record<string,{name:string;price:string;features:string[]}> = {
-  analyst: {
-    name: "Analyst",
-    price: "$10/mo",
-    features: ["5 AI trades/day","Basic signals","Email alerts","1 asset class"],
-  },
-  genius: {
-    name: "Genius",
-    price: "$29.99/mo",
-    features: ["Unlimited AI trades","Advanced signals","All asset classes","Priority support","SMS alerts"],
-  },
-  elite: {
-    name: "Elite",
-    price: "$49.99/mo",
-    features: ["Everything in Genius","Dedicated AI model","Custom strategies","White-glove support","API access"],
-  },
+  analyst: { name: "Analyst", price: "$10/mo",    features: ["5 AI trades/day","Basic signals","Email alerts","1 asset class"] },
+  genius:  { name: "Genius",  price: "$29.99/mo", features: ["Unlimited AI trades","Advanced signals","All asset classes","Priority support","SMS alerts"] },
+  elite:   { name: "Elite",   price: "$49.99/mo", features: ["Everything in Genius","Dedicated AI model","Custom strategies","White-glove support","API access"] },
+};
+
+const THRESHOLD_INFO: Record<number,{label:string;desc:string;color:string}> = {
+  70: { label: "Aggressive",    desc: "More trades, higher activity, wider signal net",       color: "text-yellow-400" },
+  80: { label: "Balanced",      desc: "Optimal mix of frequency and precision — recommended", color: "text-genius-green" },
+  90: { label: "Conservative",  desc: "Fewer, higher-conviction trades only",                 color: "text-genius-emerald" },
+};
+
+const FREQ_ICONS: Record<RebalanceFrequency, string> = {
+  Daily: "⚡", Weekly: "📅", "Bi-weekly": "🔄", Monthly: "📆", "One-time": "1️⃣", Manual: "🎛️",
 };
 
 export default function SettingsPage() {
-  const [section, setSection] = useState("profile");
+  const [section, setSection] = useState("ai");
   const [saved,   setSaved]   = useState(false);
+  const [saving,  setSaving]  = useState(false);
+  const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [dirty,   setDirty]   = useState(false);
+
+  // Profile
   const [profile, setProfile] = useState({ name: "", email: "", phone: "(480) 798-0753" });
-  const [plan, setPlan]       = useState("genius");
-  const [notifs, setNotifs]   = useState({ email: true, sms: false, push: false, ai: true, trades: true, news: false });
+  const [plan,    setPlan]     = useState("genius");
+
+  // Notifications
+  const [notifs, setNotifs] = useState({ email: true, sms: false, push: false, ai: true, trades: true, news: false });
+
+  // AI Bot Config
+  const [confidence,   setConfidence]   = useState<number>(80);
+  const [frequency,    setFrequency]    = useState<RebalanceFrequency>("Weekly");
+  const [universe,     setUniverse]     = useState<AssetGroup[]>(["US Tech Stocks","Crypto Assets","Index ETFs"]);
+  const [maxPositions, setMaxPositions] = useState(10);
+  const [autoCompound, setAutoCompound] = useState(true);
+  const [stopLoss,     setStopLoss]     = useState(0);
+  const [botActive,    setBotActive]    = useState(true);
 
   useEffect(() => {
     const user = getUser();
@@ -39,17 +64,66 @@ export default function SettingsPage() {
       setProfile(p => ({ ...p, name: user.name || "", email: user.email || "" }));
       setPlan((user as any).plan || "genius");
     }
+    const cfg = getBotConfig();
+    setConfidence(cfg.confidenceThreshold);
+    setFrequency(cfg.rebalanceFrequency);
+    setUniverse(cfg.assetUniverse);
+    setMaxPositions(cfg.maxPositions);
+    setAutoCompound(cfg.autoCompound);
+    setStopLoss(cfg.stopLossOverride);
+    setBotActive(cfg.botActive);
+    if (cfg.updatedAt) {
+      setLastSaved(new Date(cfg.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+    }
   }, []);
+
+  const toggleGroup = (g: AssetGroup) => {
+    setUniverse(u => u.includes(g) ? (u.length > 1 ? u.filter(x => x !== g) : u) : [...u, g]);
+    setDirty(true);
+  };
+
+  const handleSaveAI = async () => {
+    if (universe.length === 0) return;
+    setSaving(true);
+    const cfg: Partial<BotConfig> = {
+      confidenceThreshold: confidence,
+      rebalanceFrequency: frequency,
+      assetUniverse: universe,
+      maxPositions,
+      autoCompound,
+      stopLossOverride: stopLoss,
+      botActive,
+    };
+    saveBotConfig(cfg);
+    try {
+      await fetch("/api/bot-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cfg),
+      });
+    } catch {}
+    setSaving(false);
+    setSaved(true);
+    setDirty(false);
+    const t = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    setLastSaved(t);
+    setTimeout(() => setSaved(false), 3000);
+  };
 
   const handleSave = () => {
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
 
+  const [tradeMin, tradeMax] = estimateTradesPerWeek(confidence, universe);
+  const totalSymbols = universe.reduce((n, g) => n + (ASSET_SYMBOLS[g]?.length ?? 0), 0);
+  const nextRebalance = nextRebalanceDate(frequency);
+  const threshInfo = THRESHOLD_INFO[confidence] ?? THRESHOLD_INFO[80];
+
   const SECTIONS = [
+    { id: "ai",           icon: Brain,      label: "AI Configuration" },
     { id: "profile",      icon: User,       label: "Profile" },
     { id: "subscription", icon: CreditCard, label: "Subscription" },
-    { id: "ai",           icon: Brain,      label: "AI Configuration" },
     { id: "notifications",icon: Bell,       label: "Notifications" },
     { id: "security",     icon: Shield,     label: "Security" },
   ];
@@ -58,14 +132,13 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-black text-white">Settings</h1>
         <p className="text-xs text-genius-muted font-mono mt-0.5">Account management · AI configuration · Security</p>
       </div>
 
       <div className="grid grid-cols-4 gap-6">
-        {/* Section nav */}
+        {/* Nav */}
         <div className="col-span-1">
           <div className="genius-card rounded-xl overflow-hidden">
             {SECTIONS.map(s => (
@@ -73,21 +146,289 @@ export default function SettingsPage() {
                 key={s.id}
                 onClick={() => setSection(s.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 text-sm transition-all border-b border-genius-border/40 last:border-0 ${
-                  section===s.id
+                  section === s.id
                     ? "bg-genius-green/10 text-genius-green font-semibold"
                     : "text-genius-muted hover:text-white hover:bg-genius-card"
                 }`}
               >
                 <s.icon size={15} />
                 {s.label}
-                {section===s.id && <ChevronRight size={12} className="ml-auto" />}
+                {s.id === "ai" && dirty && <span className="ml-auto w-2 h-2 rounded-full bg-yellow-400 flex-shrink-0" />}
+                {section === s.id && !dirty && <ChevronRight size={12} className="ml-auto" />}
               </button>
             ))}
           </div>
+
+          {/* Bot status mini-card */}
+          {section === "ai" && (
+            <div className={`mt-3 genius-card rounded-xl p-3 border ${botActive ? "border-genius-green/25" : "border-genius-border"}`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-mono text-genius-muted">BOT STATUS</span>
+                <button
+                  onClick={() => { setBotActive(b => !b); setDirty(true); }}
+                  className={`w-9 h-5 rounded-full relative transition-colors ${botActive ? "bg-genius-green" : "bg-genius-border"}`}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${botActive ? "translate-x-4" : "translate-x-0.5"}`} />
+                </button>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {botActive ? (
+                  <><div className="live-dot" /><span className="text-xs text-genius-green font-mono font-bold">ACTIVE</span></>
+                ) : (
+                  <><div className="w-1.5 h-1.5 rounded-full bg-genius-muted" /><span className="text-xs text-genius-muted font-mono">PAUSED</span></>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Section content */}
+        {/* Content */}
         <div className="col-span-3">
+
+          {/* ── AI CONFIGURATION ── */}
+          {section === "ai" && (
+            <div className="flex flex-col gap-4">
+
+              {/* Config editor */}
+              <div className="genius-card rounded-xl p-6">
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-2">
+                    <Cpu size={16} className="text-genius-green" />
+                    <h2 className="font-bold text-white">AI Bot Configuration</h2>
+                  </div>
+                  {lastSaved && !dirty && (
+                    <span className="text-xs text-genius-muted font-mono flex items-center gap-1">
+                      <CheckCircle size={10} className="text-genius-green" /> Saved at {lastSaved}
+                    </span>
+                  )}
+                  {dirty && (
+                    <span className="text-xs text-yellow-400 font-mono flex items-center gap-1">
+                      <AlertTriangle size={10} /> Unsaved changes
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-6">
+                  {/* Confidence threshold */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs text-genius-muted font-mono">MINIMUM CONFIDENCE THRESHOLD</label>
+                      <span className={`text-xs font-bold font-mono ${threshInfo.color}`}>{threshInfo.label}</span>
+                    </div>
+                    <div className="flex gap-2 mb-2">
+                      {[70, 80, 90].map(v => (
+                        <button
+                          key={v}
+                          onClick={() => { setConfidence(v); setDirty(true); }}
+                          className={`flex-1 py-3 rounded-xl border text-sm font-black font-mono transition-all ${
+                            confidence === v
+                              ? "border-genius-green bg-genius-green/15 text-genius-green shadow-genius"
+                              : "border-genius-border text-genius-muted hover:text-white hover:border-genius-green/40"
+                          }`}
+                        >
+                          {v}%
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-genius-muted">{threshInfo.desc}</p>
+                  </div>
+
+                  {/* Rebalance frequency */}
+                  <div>
+                    <label className="text-xs text-genius-muted font-mono mb-2 block">REBALANCE FREQUENCY</label>
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      {(["Daily","Weekly","Bi-weekly","Monthly","One-time","Manual"] as RebalanceFrequency[]).map(f => (
+                        <button
+                          key={f}
+                          onClick={() => { setFrequency(f); setDirty(true); }}
+                          className={`py-2.5 rounded-xl border text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                            frequency === f
+                              ? "border-genius-green bg-genius-green/15 text-genius-green"
+                              : "border-genius-border text-genius-muted hover:text-white hover:border-genius-green/30"
+                          }`}
+                        >
+                          <span>{FREQ_ICONS[f]}</span> {f}
+                        </button>
+                      ))}
+                    </div>
+                    {frequency !== "Manual" && frequency !== "One-time" && (
+                      <p className="text-xs text-genius-muted font-mono">
+                        Next rebalance: <span className="text-genius-green">{nextRebalance}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Asset universe */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs text-genius-muted font-mono">ASSET UNIVERSE</label>
+                      <span className="text-xs text-genius-green font-mono font-bold">{totalSymbols} symbols active</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {ALL_GROUPS.map(g => {
+                        const active  = universe.includes(g);
+                        const meta    = ASSET_GROUP_META[g];
+                        const symbols = ASSET_SYMBOLS[g];
+                        return (
+                          <button
+                            key={g}
+                            onClick={() => toggleGroup(g)}
+                            className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
+                              active
+                                ? "border-genius-green/40 bg-genius-green/8 text-white"
+                                : "border-genius-border text-genius-muted hover:border-genius-green/25"
+                            }`}
+                          >
+                            <div className={`w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0 transition-all ${
+                              active ? "bg-genius-green border-genius-green" : "border-genius-border"
+                            }`}>
+                              {active && <CheckCircle size={11} className="text-genius-black" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm">{meta.emoji}</span>
+                                <span className={`text-sm font-semibold ${active ? "text-white" : "text-genius-muted"}`}>{g}</span>
+                              </div>
+                              <p className={`text-xs font-mono mt-0.5 ${active ? "text-genius-muted" : "text-genius-muted/50"}`}>
+                                {symbols.slice(0,5).join(", ")}{symbols.length > 5 ? " +" + (symbols.length-5) : ""}
+                              </p>
+                            </div>
+                            <span className={`text-xs font-mono font-bold flex-shrink-0 ${active ? "text-genius-green" : "text-genius-muted/50"}`}>
+                              {symbols.length}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {universe.length === 1 && (
+                      <p className="text-xs text-yellow-400 font-mono mt-1.5 flex items-center gap-1">
+                        <AlertTriangle size={10} /> At least one group must be selected
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Advanced settings */}
+                  <div className="border-t border-genius-border pt-5">
+                    <p className="text-xs text-genius-muted font-mono mb-4">ADVANCED SETTINGS</p>
+                    <div className="grid grid-cols-2 gap-5">
+                      <div>
+                        <div className="flex justify-between items-baseline mb-2">
+                          <label className="text-sm font-semibold text-white">Max Open Positions</label>
+                          <span className="font-mono font-black text-genius-green">{maxPositions}</span>
+                        </div>
+                        <input
+                          type="range" min={3} max={25} step={1} value={maxPositions}
+                          onChange={e => { setMaxPositions(Number(e.target.value)); setDirty(true); }}
+                          className="w-full h-1.5 appearance-none bg-genius-border rounded-full cursor-pointer accent-genius-green"
+                        />
+                        <div className="flex justify-between text-xs text-genius-muted font-mono mt-1">
+                          <span>3 (focused)</span><span>25 (diversified)</span>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between items-baseline mb-2">
+                          <label className="text-sm font-semibold text-white">Global Stop-Loss</label>
+                          <span className="font-mono font-black text-genius-green">{stopLoss === 0 ? "Per-position" : `${stopLoss}%`}</span>
+                        </div>
+                        <input
+                          type="range" min={0} max={25} step={1} value={stopLoss}
+                          onChange={e => { setStopLoss(Number(e.target.value)); setDirty(true); }}
+                          className="w-full h-1.5 appearance-none bg-genius-border rounded-full cursor-pointer accent-genius-green"
+                        />
+                        <div className="flex justify-between text-xs text-genius-muted font-mono mt-1">
+                          <span>Per-position</span><span>25%</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-4 flex items-center justify-between p-3 rounded-xl bg-genius-black border border-genius-border">
+                      <div>
+                        <p className="text-sm font-semibold text-white">Auto-Compound Profits</p>
+                        <p className="text-xs text-genius-muted">Reinvest gains into highest-conviction signals</p>
+                      </div>
+                      <button
+                        onClick={() => { setAutoCompound(a => !a); setDirty(true); }}
+                        className={`w-11 h-6 rounded-full relative transition-colors flex-shrink-0 ${autoCompound ? "bg-genius-green" : "bg-genius-border"}`}
+                      >
+                        <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${autoCompound ? "translate-x-5" : "translate-x-0.5"}`} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Save button */}
+                <div className="mt-6 flex items-center gap-3">
+                  <button
+                    onClick={handleSaveAI}
+                    disabled={saving || !dirty}
+                    className="px-8 py-3 rounded-xl btn-genius text-sm font-black flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {saving ? (
+                      <><RefreshCw size={14} className="animate-spin" /> Saving...</>
+                    ) : saved ? (
+                      <><CheckCircle size={14} /> Configuration Applied!</>
+                    ) : (
+                      <><Zap size={14} /> Apply Configuration</>
+                    )}
+                  </button>
+                  {saved && (
+                    <span className="text-xs text-genius-green font-mono animate-fadeIn flex items-center gap-1">
+                      <Activity size={11} /> Bot updated and trading with new rules
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Live preview panel */}
+              <div className="genius-card rounded-xl p-5 border border-genius-green/20">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="live-dot" />
+                  <h3 className="font-bold text-white text-sm">Live Bot Preview</h3>
+                  <span className="text-xs text-genius-muted font-mono ml-auto">What your bot will do with current settings</span>
+                </div>
+                <div className="grid grid-cols-4 gap-3 mb-4">
+                  {[
+                    { label: "Symbols Monitored", value: String(totalSymbols),           sub: `across ${universe.length} groups`,        color: "text-genius-green" },
+                    { label: "Trades / Week",      value: `${tradeMin}–${tradeMax}`,      sub: `at ${confidence}% confidence`,           color: "text-genius-green" },
+                    { label: "Next Rebalance",     value: nextRebalance,                  sub: frequency,                                color: "text-genius-muted" },
+                    { label: "Max Positions",      value: String(maxPositions),           sub: autoCompound ? "auto-compound on" : "compounding off", color: "text-genius-green" },
+                  ].map(m => (
+                    <div key={m.label} className="bg-genius-black rounded-xl p-3 border border-genius-border text-center">
+                      <p className="text-xs text-genius-muted font-mono mb-1">{m.label}</p>
+                      <p className={`font-black text-base ${m.color} leading-tight`}>{m.value}</p>
+                      <p className="text-xs text-genius-muted font-mono mt-0.5">{m.sub}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Active symbol tags */}
+                <div>
+                  <p className="text-xs text-genius-muted font-mono mb-2">ACTIVE TRADING UNIVERSE</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {universe.flatMap(g => ASSET_SYMBOLS[g]).map(sym => (
+                      <span key={sym} className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-genius-green/10 text-genius-green border border-genius-green/20">
+                        {sym}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Reset wizard */}
+              <div className="genius-card rounded-xl p-4 border border-genius-green/10">
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap size={14} className="text-genius-green" />
+                  <h3 className="font-bold text-white text-sm">Re-run Setup Wizard</h3>
+                </div>
+                <p className="text-xs text-genius-muted mb-3">Redo your full AI onboarding configuration from scratch.</p>
+                <button
+                  onClick={() => { window.location.href = "/onboarding"; }}
+                  className="flex items-center gap-2 text-sm text-genius-green font-semibold hover:underline"
+                >
+                  Launch Onboarding Wizard <ExternalLink size={12} />
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Profile */}
           {section === "profile" && (
@@ -97,29 +438,19 @@ export default function SettingsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs text-genius-muted font-mono mb-1.5 block">FULL NAME</label>
-                    <input
-                      value={profile.name}
-                      onChange={e => setProfile(p => ({...p, name: e.target.value}))}
-                      className="w-full bg-genius-black border border-genius-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-genius-green transition-colors"
-                    />
+                    <input value={profile.name} onChange={e => setProfile(p => ({...p, name: e.target.value}))}
+                      className="w-full bg-genius-black border border-genius-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-genius-green transition-colors" />
                   </div>
                   <div>
                     <label className="text-xs text-genius-muted font-mono mb-1.5 block">EMAIL ADDRESS</label>
-                    <input
-                      value={profile.email}
-                      onChange={e => setProfile(p => ({...p, email: e.target.value}))}
-                      className="w-full bg-genius-black border border-genius-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-genius-green transition-colors"
-                    />
+                    <input value={profile.email} onChange={e => setProfile(p => ({...p, email: e.target.value}))}
+                      className="w-full bg-genius-black border border-genius-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-genius-green transition-colors" />
                   </div>
                 </div>
                 <div>
                   <label className="text-xs text-genius-muted font-mono mb-1.5 block">PHONE NUMBER</label>
-                  <input
-                    value={profile.phone}
-                    onChange={e => setProfile(p => ({...p, phone: e.target.value}))}
-                    className="w-full bg-genius-black border border-genius-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-genius-green transition-colors"
-                    placeholder="(XXX) XXX-XXXX"
-                  />
+                  <input value={profile.phone} onChange={e => setProfile(p => ({...p, phone: e.target.value}))}
+                    className="w-full bg-genius-black border border-genius-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-genius-green transition-colors" />
                 </div>
                 <div>
                   <label className="text-xs text-genius-muted font-mono mb-1.5 block">TIMEZONE</label>
@@ -175,7 +506,6 @@ export default function SettingsPage() {
                   )}
                 </div>
               </div>
-
               <div className="genius-card rounded-xl p-5">
                 <h3 className="font-bold text-white mb-3">Usage This Month</h3>
                 <div className="grid grid-cols-3 gap-4">
@@ -195,85 +525,6 @@ export default function SettingsPage() {
                     </div>
                   ))}
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* AI Configuration */}
-          {section === "ai" && (
-            <div className="flex flex-col gap-4">
-              <div className="genius-card rounded-xl p-6">
-                <h2 className="font-bold text-white mb-5">AI Bot Configuration</h2>
-                <div className="flex flex-col gap-5">
-                  <div>
-                    <label className="text-xs text-genius-muted font-mono mb-1.5 block">MINIMUM CONFIDENCE THRESHOLD</label>
-                    <div className="flex gap-2">
-                      {[70, 80, 90].map(v => (
-                        <button key={v}
-                          className="flex-1 py-2.5 rounded-lg border border-genius-green/40 text-genius-green text-sm font-bold hover:bg-genius-green/10 transition-colors first:bg-genius-green/10">
-                          {v}%
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-genius-muted mt-1.5">AI will only execute trades above this confidence score</p>
-                  </div>
-                  <div>
-                    <label className="text-xs text-genius-muted font-mono mb-1.5 block">REBALANCE FREQUENCY</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {["Daily","Weekly","Bi-weekly","Monthly","One-time","Manual"].map(f => (
-                        <button key={f}
-                          className={`py-2 rounded-lg border text-sm font-semibold transition-colors ${
-                            f==="Weekly"
-                              ? "border-genius-green/40 bg-genius-green/10 text-genius-green"
-                              : "border-genius-border text-genius-muted hover:text-white hover:border-genius-green/30"
-                          }`}>
-                          {f}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-genius-muted font-mono mb-3 block">ASSET UNIVERSE</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { label: "US Tech Stocks",   active: true },
-                        { label: "Crypto Assets",     active: true },
-                        { label: "Index ETFs",        active: true },
-                        { label: "High-Growth",       active: false },
-                        { label: "Global Equities",   active: false },
-                        { label: "Commodities",       active: false },
-                      ].map(a => (
-                        <div key={a.label} className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors ${
-                          a.active ? "border-genius-green/40 bg-genius-green/10" : "border-genius-border"
-                        }`}>
-                          <div className={`w-4 h-4 rounded border flex items-center justify-center ${
-                            a.active ? "bg-genius-green border-genius-green" : "border-genius-border"
-                          }`}>
-                            {a.active && <CheckCircle size={10} className="text-genius-black" />}
-                          </div>
-                          <span className={`text-sm ${a.active ? "text-white" : "text-genius-muted"}`}>{a.label}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <button onClick={handleSave} className="mt-5 px-6 py-2.5 rounded-lg btn-genius text-sm font-bold flex items-center gap-2">
-                  {saved ? <><CheckCircle size={14} /> Saved!</> : "Save AI Settings"}
-                </button>
-              </div>
-
-              <div className="genius-card rounded-xl p-4 border border-genius-green/15">
-                <div className="flex items-center gap-2 mb-2">
-                  <Zap size={14} className="text-genius-green" />
-                  <h3 className="font-bold text-white text-sm">Re-run Setup Wizard</h3>
-                </div>
-                <p className="text-xs text-genius-muted mb-3">Redo your full AI onboarding configuration from scratch. This will reset your current AI preferences.</p>
-                <button
-                  onClick={() => window.location.href = "/onboarding"}
-                  className="flex items-center gap-2 text-sm text-genius-green font-semibold hover:underline"
-                >
-                  Launch Onboarding Wizard <ExternalLink size={12} />
-                </button>
               </div>
             </div>
           )}
@@ -317,51 +568,34 @@ export default function SettingsPage() {
               <div className="genius-card rounded-xl p-6">
                 <h2 className="font-bold text-white mb-5">Security</h2>
                 <div className="flex flex-col gap-4">
-                  <div className="flex items-center justify-between p-4 bg-genius-black rounded-xl border border-genius-border">
-                    <div className="flex items-center gap-3">
-                      <Lock size={16} className="text-genius-green" />
-                      <div>
-                        <p className="text-sm font-semibold text-white">Password</p>
-                        <p className="text-xs text-genius-muted">Last changed 14 days ago</p>
+                  {[
+                    { icon: Lock,   label: "Password",                  sub: "Last changed 14 days ago",        action: "Change", color: "text-genius-green" },
+                    { icon: Shield, label: "Two-Factor Authentication", sub: "Adds an extra layer of protection", action: "Enable", color: "text-genius-green" },
+                    { icon: Globe,  label: "Active Sessions",           sub: "1 active session · Gilbert, AZ",  action: "Revoke All", color: "text-red-400" },
+                  ].map(r => (
+                    <div key={r.label} className="flex items-center justify-between p-4 bg-genius-black rounded-xl border border-genius-border">
+                      <div className="flex items-center gap-3">
+                        <r.icon size={16} className={r.color} />
+                        <div>
+                          <p className="text-sm font-semibold text-white">{r.label}</p>
+                          <p className="text-xs text-genius-muted">{r.sub}</p>
+                        </div>
                       </div>
+                      <button className={`text-sm ${r.color} font-semibold hover:underline`}>{r.action}</button>
                     </div>
-                    <button className="text-sm text-genius-green font-semibold hover:underline">Change</button>
-                  </div>
-                  <div className="flex items-center justify-between p-4 bg-genius-black rounded-xl border border-genius-border">
-                    <div className="flex items-center gap-3">
-                      <Shield size={16} className="text-yellow-400" />
-                      <div>
-                        <p className="text-sm font-semibold text-white">Two-Factor Authentication</p>
-                        <p className="text-xs text-genius-muted">Adds an extra layer of protection</p>
-                      </div>
-                    </div>
-                    <button className="text-sm text-genius-green font-semibold hover:underline">Enable</button>
-                  </div>
-                  <div className="flex items-center justify-between p-4 bg-genius-black rounded-xl border border-genius-border">
-                    <div className="flex items-center gap-3">
-                      <Globe size={16} className="text-genius-muted" />
-                      <div>
-                        <p className="text-sm font-semibold text-white">Active Sessions</p>
-                        <p className="text-xs text-genius-muted">1 active session · Gilbert, AZ</p>
-                      </div>
-                    </div>
-                    <button className="text-sm text-red-400 font-semibold hover:underline">Revoke All</button>
-                  </div>
+                  ))}
                 </div>
               </div>
-
               <div className="genius-card rounded-xl p-5 border border-red-500/20">
                 <h3 className="font-bold text-white mb-1">Danger Zone</h3>
                 <p className="text-xs text-genius-muted mb-4">Irreversible account actions</p>
                 <div className="flex flex-col gap-2">
-                  <button className="flex items-center justify-between p-3 rounded-lg border border-red-500/20 hover:bg-red-500/5 transition-colors">
-                    <span className="text-sm text-red-400 font-semibold">Cancel Subscription</span>
-                    <ChevronRight size={14} className="text-red-400" />
-                  </button>
-                  <button className="flex items-center justify-between p-3 rounded-lg border border-red-500/20 hover:bg-red-500/5 transition-colors">
-                    <span className="text-sm text-red-400 font-semibold">Delete Account</span>
-                    <ChevronRight size={14} className="text-red-400" />
-                  </button>
+                  {["Cancel Subscription","Delete Account"].map(a => (
+                    <button key={a} className="flex items-center justify-between p-3 rounded-lg border border-red-500/20 hover:bg-red-500/5 transition-colors">
+                      <span className="text-sm text-red-400 font-semibold">{a}</span>
+                      <ChevronRight size={14} className="text-red-400" />
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>

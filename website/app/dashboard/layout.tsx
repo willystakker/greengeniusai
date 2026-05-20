@@ -8,6 +8,7 @@ import {
   Shield, PieChart, Zap, ToggleLeft, ToggleRight, CreditCard,
 } from "lucide-react";
 import { getUser, clearUser } from "@/lib/auth";
+import { getBotConfig } from "@/lib/bot-config";
 
 const NAV = [
   { icon: BarChart3,   label: "Portfolio",     href: "/dashboard" },
@@ -22,8 +23,9 @@ const NAV = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router   = useRouter();
   const pathname = usePathname();
-  const [botActive,  setBotActive]  = useState(true);
-  const [riskLevel,  setRiskLevel]  = useState<"conservative"|"moderate"|"aggressive">("moderate");
+  const [botActive,   setBotActive]   = useState(true);
+  const [riskLevel,   setRiskLevel]   = useState<"conservative"|"moderate"|"aggressive">("moderate");
+  const [threshold,   setThreshold]   = useState(80);
   const [notifications] = useState(3);
 
   useEffect(() => {
@@ -31,6 +33,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!user) { router.push("/auth"); return; }
     setRiskLevel((user as any).riskProfile || "moderate");
     setBotActive((user as any).botActive ?? true);
+    const cfg = getBotConfig();
+    setThreshold(cfg.confidenceThreshold);
+    setBotActive(cfg.botActive);
   }, [router]);
 
   const handleSignOut = async () => { await clearUser(); router.push("/"); };
@@ -65,11 +70,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
             <div className="flex items-center gap-2">
               {botActive ? (
-                <><div className="live-dot" /><span className="text-xs font-bold text-genius-green font-mono">ACTIVE — AUTO-TRADING</span></>
+                <><div className="live-dot" /><span className="text-xs font-bold text-genius-green font-mono">ACTIVE</span></>
               ) : (
-                <><div className="w-2 h-2 rounded-full bg-genius-muted" /><span className="text-xs font-bold text-genius-muted font-mono">MANUAL MODE</span></>
+                <><div className="w-2 h-2 rounded-full bg-genius-muted" /><span className="text-xs font-bold text-genius-muted font-mono">PAUSED</span></>
               )}
             </div>
+            {botActive && (
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <div className="flex-1 h-1 bg-genius-border rounded-full overflow-hidden">
+                  <div className="h-full bg-genius-green rounded-full" style={{width:`${threshold}%`}} />
+                </div>
+                <span className="text-xs text-genius-muted font-mono">{threshold}% conf</span>
+              </div>
+            )}
           </div>
         </div>
 
