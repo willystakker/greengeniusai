@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Brain, TrendingUp, DollarSign, Bell, Plus,
   Activity, Zap, CheckCircle, AlertTriangle, X,
@@ -98,9 +99,9 @@ export default function PortfolioPage() {
               </span>
             )}
           </button>
-          <button className="px-4 py-2 rounded-lg btn-genius text-sm font-bold flex items-center gap-2">
+          <Link href="/dashboard/add-funds" className="px-4 py-2 rounded-lg btn-genius text-sm font-bold flex items-center gap-2">
             <Plus size={14} /> Add Funds
-          </button>
+          </Link>
         </div>
       </div>
 

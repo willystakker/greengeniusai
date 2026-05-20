@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   User, CreditCard, Brain, Bell, Shield, ChevronRight,
   CheckCircle, ExternalLink, Zap, Globe, Lock,
@@ -36,8 +37,9 @@ const FREQ_ICONS: Record<RebalanceFrequency, string> = {
   Daily: "⚡", Weekly: "📅", "Bi-weekly": "🔄", Monthly: "📆", "One-time": "1️⃣", Manual: "🎛️",
 };
 
-export default function SettingsPage() {
-  const [section, setSection] = useState("ai");
+function SettingsContent() {
+  const searchParams = useSearchParams();
+  const [section, setSection] = useState(() => searchParams.get("section") ?? "ai");
   const [saved,   setSaved]   = useState(false);
   const [saving,  setSaving]  = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
@@ -819,5 +821,13 @@ export default function SettingsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <SettingsContent />
+    </Suspense>
   );
 }
