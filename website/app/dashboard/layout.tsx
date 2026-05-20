@@ -5,17 +5,18 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   Brain, Bell, Settings, LogOut, BarChart3, Activity,
-  Shield, PieChart, Zap, ToggleLeft, ToggleRight,
+  Shield, PieChart, Zap, ToggleLeft, ToggleRight, CreditCard,
 } from "lucide-react";
 import { getUser, clearUser } from "@/lib/auth";
 
 const NAV = [
-  { icon: BarChart3, label: "Portfolio",     href: "/dashboard" },
-  { icon: Activity,  label: "Live Trades",   href: "/dashboard/trades" },
-  { icon: Brain,     label: "AI Insights",   href: "/dashboard/insights" },
-  { icon: PieChart,  label: "Allocation",    href: "/dashboard/allocation" },
-  { icon: Shield,    label: "Risk Settings", href: "/dashboard/risk" },
-  { icon: Bell,      label: "Alerts",        href: "/dashboard/alerts" },
+  { icon: BarChart3,   label: "Portfolio",     href: "/dashboard" },
+  { icon: Activity,    label: "Live Trades",   href: "/dashboard/trades" },
+  { icon: Brain,       label: "AI Insights",   href: "/dashboard/insights" },
+  { icon: PieChart,    label: "Allocation",    href: "/dashboard/allocation" },
+  { icon: Shield,      label: "Risk Settings", href: "/dashboard/risk" },
+  { icon: Bell,        label: "Alerts",        href: "/dashboard/alerts" },
+  { icon: CreditCard,  label: "Billing",       href: "/dashboard/billing" },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

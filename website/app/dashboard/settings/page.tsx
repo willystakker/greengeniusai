@@ -5,6 +5,7 @@ import {
   User, CreditCard, Brain, Bell, Shield, ChevronRight,
   CheckCircle, ExternalLink, Zap, Globe, Lock, LogOut,
 } from "lucide-react";
+import Link from "next/link";
 import { getUser } from "@/lib/auth";
 
 const PLAN_FEATURES: Record<string,{name:string;price:string;features:string[]}> = {
@@ -164,13 +165,13 @@ export default function SettingsPage() {
                   ))}
                 </div>
                 <div className="flex gap-3">
-                  <button className="px-5 py-2.5 rounded-lg border border-genius-green/40 text-genius-green text-sm font-bold hover:bg-genius-green/10 transition-colors">
+                  <Link href="/dashboard/billing" className="px-5 py-2.5 rounded-lg border border-genius-green/40 text-genius-green text-sm font-bold hover:bg-genius-green/10 transition-colors">
                     Manage Billing
-                  </button>
+                  </Link>
                   {plan !== "elite" && (
-                    <button className="px-5 py-2.5 rounded-lg btn-genius text-sm font-bold">
+                    <Link href="/upgrade" className="px-5 py-2.5 rounded-lg btn-genius text-sm font-bold">
                       Upgrade to Elite
-                    </button>
+                    </Link>
                   )}
                 </div>
               </div>

@@ -25,9 +25,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const email = sanitizeEmail(body.email);
-  const name  = sanitizeString(body.name, 100);
-  const plan  = sanitizeString(body.plan, 20) || "genius";
+  const email       = sanitizeEmail(body.email);
+  const name        = sanitizeString(body.name, 100);
+  const plan        = sanitizeString(body.plan, 20) || "genius";
+  const discountPct = typeof body.discountPct === "number"
+    ? Math.min(100, Math.max(0, Math.round(body.discountPct)))
+    : 0;
 
   if (!email) return NextResponse.json({ error: "Valid email required" }, { status: 400 });
   if (!["analyst", "genius", "elite"].includes(plan)) {
@@ -50,14 +53,26 @@ export async function POST(req: NextRequest) {
     const stripe = new Stripe(stripeKey);
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://greengeniusai.app";
 
+    // Build optional discount: create a one-time coupon on the fly if discount was earned via spin wheel
+    let discounts: { coupon: string }[] | undefined;
+    if (discountPct > 0) {
+      const coupon = await stripe.coupons.create({
+        percent_off: discountPct,
+        duration: "once",
+        name: `Spin Wheel ${discountPct}% Off`,
+      });
+      discounts = [{ coupon: coupon.id }];
+    }
+
     const stripeSession = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer_email: customerEmail,
       line_items: [{ price: priceId, quantity: 1 }],
-      subscription_data: { trial_period_days: 7 },
+      subscription_data: { trial_period_days: discountPct > 0 ? 0 : 7 },
+      ...(discounts ? { discounts } : {}),
       success_url: `${siteUrl}/onboarding?plan=${plan}&subscribed=true`,
       cancel_url:  `${siteUrl}/checkout?plan=${plan}&cancelled=true`,
-      metadata: { name, plan, userId: session?.id ?? "" },
+      metadata: { name, plan, userId: session?.id ?? "", discountPct: String(discountPct) },
       billing_address_collection: "auto",
       phone_number_collection: { enabled: plan === "elite" },
     });
