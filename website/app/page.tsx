@@ -262,6 +262,13 @@ export default function HomePage() {
                   {l}
                 </a>
               ))}
+              <Link href="/market" className="text-sm text-genius-muted hover:text-genius-green transition-colors flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-genius-green animate-pulse" />
+                Live Market
+              </Link>
+              <Link href="/about" className="text-sm text-genius-muted hover:text-genius-green transition-colors">
+                About Us
+              </Link>
             </div>
 
             {/* CTA */}
@@ -300,6 +307,9 @@ export default function HomePage() {
                 {l}
               </a>
             ))}
+            <Link href="/about" className="text-genius-muted hover:text-genius-green" onClick={() => setMenuOpen(false)}>
+              About Us
+            </Link>
             <Link href="/auth?mode=signup" className="btn-genius px-5 py-3 rounded-lg text-center font-bold">
               Get Started Free
             </Link>
@@ -364,13 +374,13 @@ export default function HomePage() {
                   Get Started Free
                   <ChevronRight size={18} />
                 </Link>
-                <a
-                  href="#how-it-works"
+                <Link
+                  href="/demo"
                   className="px-8 py-4 rounded-xl border border-genius-border text-genius-text hover:border-genius-green hover:text-genius-green transition-all flex items-center justify-center gap-2 text-base font-semibold"
                 >
                   <Play size={16} />
                   See It In Action
-                </a>
+                </Link>
               </div>
 
               {/* Trust signals */}
@@ -414,19 +424,27 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                {/* Mini chart bars */}
-                <div className="flex items-end gap-1 h-16 mb-4">
-                  {[40, 55, 45, 70, 60, 80, 65, 90, 75, 95, 85, 100, 88, 96].map((h, i) => (
-                    <div
-                      key={i}
-                      className="flex-1 rounded-sm"
-                      style={{
-                        height: `${h}%`,
-                        background: i >= 10 ? "linear-gradient(to top, #00FF41, #00D97E)" : "rgba(0,255,65,0.2)",
-                      }}
-                    />
-                  ))}
-                </div>
+                {/* Mini chart bars — click to open live market */}
+                <Link href="/market" className="block group cursor-pointer">
+                  <div className="flex items-end gap-1 h-16 mb-1 relative">
+                    {[40, 55, 45, 70, 60, 80, 65, 90, 75, 95, 85, 100, 88, 96].map((h, i) => (
+                      <div
+                        key={i}
+                        className="flex-1 rounded-sm transition-opacity group-hover:opacity-80"
+                        style={{
+                          height: `${h}%`,
+                          background: i >= 10 ? "linear-gradient(to top, #00FF41, #00D97E)" : "rgba(0,255,65,0.2)",
+                        }}
+                      />
+                    ))}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="bg-genius-green text-genius-black text-xs font-black px-3 py-1 rounded-full shadow-lg">
+                        VIEW LIVE MARKET →
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-genius-muted font-mono mb-3 group-hover:text-genius-green transition-colors">↗ Click to open live market intelligence</p>
+                </Link>
 
                 {/* Latest AI trade */}
                 <div className="border-t border-genius-border pt-4">
@@ -792,6 +810,7 @@ export default function HomePage() {
               <span className="font-black text-white">GreenGeniusAI</span>
             </div>
             <div className="flex flex-wrap gap-6 text-xs text-genius-muted">
+              <Link href="/about" className="hover:text-genius-green transition-colors">About Us</Link>
               <a href="#" className="hover:text-genius-green transition-colors">Privacy Policy</a>
               <a href="#" className="hover:text-genius-green transition-colors">Terms of Service</a>
               <a href="#" className="hover:text-genius-green transition-colors">Disclosures</a>

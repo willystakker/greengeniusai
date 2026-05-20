@@ -56,26 +56,40 @@ export async function POST(req: NextRequest) {
     // Build optional discount: create a one-time coupon on the fly if discount was earned via spin wheel
     let discounts: { coupon: string }[] | undefined;
     if (discountPct > 0) {
-      const coupon = await stripe.coupons.create({
-        percent_off: discountPct,
-        duration: "once",
-        name: `Spin Wheel ${discountPct}% Off`,
-      });
-      discounts = [{ coupon: coupon.id }];
+      try {
+        const coupon = await stripe.coupons.create({
+          percent_off: discountPct,
+          duration: "once",
+          name: `Spin Wheel ${discountPct}% Off`,
+        });
+        discounts = [{ coupon: coupon.id }];
+      } catch (couponErr: any) {
+        console.error("Coupon creation failed:", JSON.stringify(couponErr));
+        // Proceed without discount rather than blocking checkout
+      }
     }
 
-    const stripeSession = await stripe.checkout.sessions.create({
+    // trial_period_days and discounts are mutually exclusive in Stripe:
+    // - with discount: apply coupon, no trial
+    // - without discount: 7-day trial, no coupon
+    const sessionParams: any = {
       mode: "subscription",
       customer_email: customerEmail,
       line_items: [{ price: priceId, quantity: 1 }],
-      subscription_data: { trial_period_days: discountPct > 0 ? 0 : 7 },
-      ...(discounts ? { discounts } : {}),
       success_url: `${siteUrl}/onboarding?plan=${plan}&subscribed=true`,
       cancel_url:  `${siteUrl}/checkout?plan=${plan}&cancelled=true`,
       metadata: { name, plan, userId: session?.id ?? "", discountPct: String(discountPct) },
       billing_address_collection: "auto",
       phone_number_collection: { enabled: plan === "elite" },
-    });
+    };
+
+    if (discounts) {
+      sessionParams.discounts = discounts;
+    } else {
+      sessionParams.subscription_data = { trial_period_days: 7 };
+    }
+
+    const stripeSession = await stripe.checkout.sessions.create(sessionParams);
 
     return NextResponse.json({ url: stripeSession.url });
   } catch (err: any) {
