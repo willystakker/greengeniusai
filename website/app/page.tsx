@@ -294,8 +294,8 @@ export default function HomePage() {
                   <Link href="/auth" className="text-sm text-genius-muted hover:text-white transition-colors">
                     Sign In
                   </Link>
-                  <Link href="/auth?mode=signup" className="btn-genius px-5 py-2 rounded-lg text-sm font-bold">
-                    Get Started Free
+                  <Link href="/access" className="btn-genius px-5 py-2 rounded-lg text-sm font-bold">
+                    Get Started
                   </Link>
                 </>
               )}
@@ -332,8 +332,8 @@ export default function HomePage() {
                 <LayoutDashboard size={15} /> Go to Dashboard
               </Link>
             ) : (
-              <Link href="/auth?mode=signup" className="btn-genius px-5 py-3 rounded-lg text-center font-bold" onClick={() => setMenuOpen(false)}>
-                Get Started Free
+              <Link href="/access" className="btn-genius px-5 py-3 rounded-lg text-center font-bold" onClick={() => setMenuOpen(false)}>
+                Get Started
               </Link>
             )}
           </div>
@@ -387,15 +387,15 @@ export default function HomePage() {
               </h1>
 
               <p className="text-lg text-genius-text leading-relaxed mb-8 max-w-lg">
-                GreenGeniusAI automatically detects the hottest trending assets, buys in at the perfect moment, and exits before the decline — then tells you <em>exactly</em> why it made every move. Founding member rate: $14.99/month.
+                GreenGeniusAI automatically detects the hottest trending assets, buys in at the perfect moment, and exits before the decline — then tells you <em>exactly</em> why it made every move.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 mb-10">
                 <Link
-                  href="/auth?mode=signup"
+                  href="/access"
                   className="btn-genius px-8 py-4 rounded-xl text-base font-black flex items-center justify-center gap-2"
                 >
-                  Get Started Free
+                  Get Access
                   <ChevronRight size={18} />
                 </Link>
                 <Link
@@ -662,12 +662,12 @@ export default function HomePage() {
       <section id="pricing" className="py-24 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
-            <p className="text-genius-green font-mono text-sm font-bold mb-3">PRICING</p>
+            <p className="text-genius-green font-mono text-sm font-bold mb-3">CAPABILITIES</p>
             <h2 className="text-4xl font-black text-white mb-4">
-              Pick Your Edge. <span className="text-genius-green">All Plans Include AI.</span>
+              Built for Every Edge. <span className="text-genius-green">All Plans Include AI.</span>
             </h2>
             <p className="text-genius-text">
-              Start free for 7 days. No credit card required. Cancel anytime.
+              Private access only. Request access to get started.
             </p>
           </div>
 
@@ -699,14 +699,6 @@ export default function HomePage() {
                 <h3 className="text-2xl font-black text-white mb-1">{plan.name}</h3>
                 <p className="text-xs text-genius-muted mb-6 leading-relaxed">{plan.description}</p>
 
-                <div className="mb-8">
-                  <span className="text-5xl font-black text-white">${plan.price}</span>
-                  {plan.priceCents && (
-                    <span className="text-2xl font-black text-genius-green">{plan.priceCents}</span>
-                  )}
-                  <span className="text-genius-muted">/month</span>
-                </div>
-
                 <div className="flex flex-col gap-2.5 mb-8 flex-1">
                   {plan.features.map((f, i) => (
                     <div key={i} className="flex items-start gap-3">
@@ -723,17 +715,17 @@ export default function HomePage() {
                 </div>
 
                 <Link
-                  href={`/auth?mode=signup&plan=${plan.slug}`}
+                  href="/access"
                   className={`w-full py-3.5 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all ${
                     plan.highlight
                       ? "btn-genius"
                       : "border border-genius-border text-genius-text hover:border-genius-green hover:text-genius-green"
                   }`}
                 >
-                  {plan.highlight ? "Start Free Trial" : "Get Started"}
+                  {plan.highlight ? "Get Access" : "Get Access"}
                   <ArrowUpRight size={16} />
                 </Link>
-                <p className="text-xs text-genius-muted mt-3 text-center">7-day free trial · cancel anytime</p>
+                <p className="text-xs text-genius-muted mt-3 text-center">Private access · by invitation only</p>
               </div>
             ))}
           </div>
@@ -802,24 +794,18 @@ export default function HomePage() {
             Ready to Invest<br />Like a <span className="text-genius-green glow-text">Genius?</span>
           </h2>
           <p className="text-genius-text text-lg mb-8">
-            Start with AI-powered insights at $10/mo, or let the bot fully automate your portfolio from $29.99.
+            GreenGeniusAI is a private tool. Enter your access code to get started.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
-              href="/auth?mode=signup&plan=genius"
+              href="/access"
               className="btn-genius inline-flex items-center gap-2 px-10 py-5 rounded-xl text-lg font-black"
             >
-              Start Free — Genius Plan
+              Enter Access Code
               <ChevronRight size={22} />
             </Link>
-            <Link
-              href="#pricing"
-              className="inline-flex items-center gap-2 px-10 py-5 rounded-xl text-base font-bold border border-genius-border text-genius-text hover:border-genius-green hover:text-genius-green transition-all"
-            >
-              Compare Plans
-            </Link>
           </div>
-          <p className="text-xs text-genius-muted mt-4">No credit card required. Cancel anytime.</p>
+          <p className="text-xs text-genius-muted mt-4">Private access only.</p>
         </div>
       </section>
 

@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   Brain, Bell, Settings, LogOut, BarChart3, Activity,
-  Shield, PieChart, Zap, ToggleLeft, ToggleRight, CreditCard,
+  Shield, PieChart, Zap, ToggleLeft, ToggleRight,
   Star, Newspaper, Bot, FlameKindling, Infinity, Rocket,
 } from "lucide-react";
 import { getUser, clearUser } from "@/lib/auth";
@@ -24,7 +24,6 @@ const NAV = [
   { icon: FlameKindling,   label: "Derivatives",   href: "/dashboard/derivatives" },
   { icon: Infinity,        label: "Perpetuals",    href: "/dashboard/perpetuals" },
   { icon: Rocket,          label: "IPOs",          href: "/dashboard/ipos" },
-  { icon: CreditCard,      label: "Billing",       href: "/dashboard/billing" },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

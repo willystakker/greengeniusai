@@ -110,7 +110,7 @@ export default function AuthPage() {
         if (!res.ok) { setError(data.error || "Something went wrong"); setLoading(false); return; }
         saveUser(data.user);
         localStorage.setItem(PIN_KEY, pin.join(""));
-        router.push("/checkout");
+        router.push("/dashboard");
       } catch {
         setError("Network error — please try again.");
       } finally {

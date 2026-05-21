@@ -80,6 +80,18 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const method = req.method.toUpperCase();
 
+  // 0. Access code gate — must be first
+  const isAccessPage    = pathname === '/access';
+  const isAccessApi     = pathname === '/api/access';
+  const isNextInternal  = pathname.startsWith('/_next') || pathname === '/favicon.ico';
+
+  if (!isAccessPage && !isAccessApi && !isNextInternal) {
+    const accessCookie = req.cookies.get('ggai_access');
+    if (!accessCookie) {
+      return NextResponse.redirect(new URL('/access', req.url));
+    }
+  }
+
   // 1. Block scanners / attack tools by User-Agent
   const ua = req.headers.get('user-agent')?.toLowerCase() ?? '';
   if (BLOCKED_UAS.some(b => ua.includes(b))) {
@@ -184,6 +196,7 @@ export async function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     // Covers all routes except Next.js internals and static assets
+    // Includes /access and /api/access explicitly so the gate check always runs
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 };
