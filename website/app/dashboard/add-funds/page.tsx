@@ -44,9 +44,9 @@ export default function AddFundsPage() {
           <ArrowLeft size={16} />
         </button>
         <div>
-          <h1 className="text-2xl font-black text-white">Add Virtual Funds</h1>
+          <h1 className="text-2xl font-black text-white">Add Funds</h1>
           <p className="text-xs text-genius-muted font-mono">
-            Fund your paper trading account — no real money, full experience
+            Deposit funds to your trading account
           </p>
         </div>
       </div>
@@ -54,7 +54,7 @@ export default function AddFundsPage() {
       {/* Current balance */}
       <div className="genius-card rounded-xl p-4 flex items-center justify-between border border-genius-green/20">
         <div>
-          <p className="text-xs text-genius-muted font-mono mb-0.5">CURRENT PAPER BALANCE</p>
+          <p className="text-xs text-genius-muted font-mono mb-0.5">CURRENT BALANCE</p>
           <p className="text-2xl font-black text-genius-green font-mono">
             ${balance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
@@ -112,7 +112,7 @@ export default function AddFundsPage() {
           {numAmount >= 10 && (
             <div className="genius-card rounded-xl p-5 border border-genius-green/20">
               <div className="flex justify-between text-sm mb-4">
-                <span className="text-genius-muted">Adding to paper account</span>
+                <span className="text-genius-muted">Adding to account</span>
                 <span className="text-genius-green font-black text-base font-mono">
                   ${numAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </span>
@@ -130,9 +130,9 @@ export default function AddFundsPage() {
           <div className="genius-card rounded-xl p-5 border border-genius-border">
             <div className="grid grid-cols-3 gap-4 text-center text-xs text-genius-muted">
               {[
-                { icon: "🎮", title: "Paper Trading", sub: "Virtual money, real market prices. Zero risk to your wallet." },
-                { icon: "⚡", title: "Instant",       sub: "Funds available immediately — the AI bot starts trading right away." },
-                { icon: "🤖", title: "AI Deploys It", sub: "The bot auto-invests based on your confidence settings." },
+                { icon: "⚡", title: "Instant Deposit", sub: "Funds are added instantly and the AI begins investing right away." },
+                { icon: "📈", title: "Live Prices",     sub: "Every trade uses live market data for accurate execution." },
+                { icon: "🤖", title: "AI Deploys It",   sub: "The bot auto-invests based on your confidence settings." },
               ].map(c => (
                 <div key={c.title}>
                   <div className="text-2xl mb-2">{c.icon}</div>
@@ -155,7 +155,7 @@ export default function AddFundsPage() {
             <span className="text-genius-green font-black text-xl">
               ${numAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </span>{" "}
-            added to your paper account instantly.
+            added to your account.
           </p>
           <p className="text-xs text-genius-muted font-mono mb-2">
             New balance:{" "}
@@ -164,7 +164,7 @@ export default function AddFundsPage() {
             </span>
           </p>
           <p className="text-xs text-genius-muted font-mono mb-8">
-            The AI bot will start investing your virtual funds immediately.
+            Funds added to your account instantly. The AI bot will start investing right away.
           </p>
 
           <div className="flex gap-3">

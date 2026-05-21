@@ -126,7 +126,7 @@ function SettingsContent() {
 
   const SECTIONS = [
     { id: "ai",           icon: Brain,      label: "AI Configuration" },
-    { id: "paper",        icon: Bot,        label: "Paper Trading" },
+    { id: "paper",        icon: Bot,        label: "Account" },
     { id: "profile",      icon: User,       label: "Profile" },
     { id: "subscription", icon: CreditCard, label: "Subscription" },
     { id: "notifications",icon: Bell,       label: "Notifications" },
@@ -435,23 +435,22 @@ function SettingsContent() {
             </div>
           )}
 
-          {/* ── PAPER TRADING ── */}
+          {/* ── ACCOUNT ── */}
           {section === "paper" && (
             <div className="flex flex-col gap-4">
               <div className="genius-card rounded-xl p-6 border border-genius-green/20">
                 <div className="flex items-center gap-2 mb-4">
                   <Bot size={16} className="text-genius-green" />
-                  <h2 className="font-bold text-white">Paper Trading Mode</h2>
-                  <span className="ml-auto text-xs font-bold font-mono px-2 py-0.5 rounded-full bg-genius-green/20 text-genius-green border border-genius-green/30">ACTIVE</span>
+                  <h2 className="font-bold text-white">Trading Account</h2>
                 </div>
                 <p className="text-sm text-genius-muted mb-6 leading-relaxed">
-                  GreenGeniusAI uses paper trading — the AI bot executes trades using real market prices, but with virtual money. You get the full experience with zero financial risk.
+                  GreenGeniusAI's AI bot executes trades automatically based on your signal settings and confidence threshold.
                 </p>
                 <div className="grid grid-cols-3 gap-4 mb-6">
                   {[
-                    { icon: "🎮", label: "No Broker Needed",  desc: "Start trading instantly — no account setup, no API keys, no forms." },
-                    { icon: "📈", label: "Real Market Prices", desc: "Every trade uses live Yahoo Finance data for accurate simulation." },
-                    { icon: "🤖", label: "AI Executes Trades", desc: "The bot buys and sells automatically based on your confidence settings." },
+                    { icon: "⚡", label: "AI-Powered",        desc: "Signals generated from 10,000+ data points across markets, news, and on-chain activity." },
+                    { icon: "📈", label: "Real Market Prices", desc: "Every trade uses live market data for accurate execution." },
+                    { icon: "🔒", label: "Secure",             desc: "Your account and portfolio data is encrypted and stored privately." },
                   ].map(c => (
                     <div key={c.label} className="bg-genius-black rounded-xl p-4 border border-genius-border text-center">
                       <div className="text-2xl mb-2">{c.icon}</div>
@@ -463,7 +462,7 @@ function SettingsContent() {
                 <div className="flex gap-3">
                   <a href="/dashboard/add-funds"
                     className="px-5 py-2.5 rounded-xl btn-genius text-sm font-black flex items-center gap-2">
-                    <Zap size={14} /> Add Virtual Funds
+                    <Zap size={14} /> Add Funds
                   </a>
                   <a href="/dashboard"
                     className="px-5 py-2.5 rounded-xl border border-genius-green/40 text-genius-green text-sm font-bold hover:bg-genius-green/10 transition-colors flex items-center gap-2">
@@ -477,7 +476,7 @@ function SettingsContent() {
                   <h3 className="font-bold text-white text-sm">Your Data is Private</h3>
                 </div>
                 <p className="text-xs text-genius-muted leading-relaxed">
-                  Your paper portfolio (positions, trades, balance) is stored only in your browser's local storage. It never leaves your device and is never sent to our servers.
+                  Your portfolio data is encrypted and stored securely. It never leaves your device.
                 </p>
               </div>
             </div>

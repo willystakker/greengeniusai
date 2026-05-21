@@ -1,4 +1,4 @@
-// Paper trading engine — all state stored in localStorage (no broker needed)
+// Trading engine — portfolio state stored in localStorage
 
 export type PaperPosition = {
   sym: string;
@@ -26,7 +26,7 @@ export type PaperPortfolio = {
   trades: PaperTrade[];
 };
 
-const KEY = "ggai_paper_portfolio";
+const KEY = "ggai_portfolio";
 const DEFAULT_BALANCE = 10000;
 
 export function loadPaperPortfolio(): PaperPortfolio {

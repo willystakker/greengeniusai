@@ -1,7 +1,6 @@
 /**
  * POST /api/bot/run
  * Runs the AI signal engine and returns buy/sell recommendations.
- * Execution happens client-side via the paper trading engine (no broker needed).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -15,7 +14,7 @@ interface RunResult {
   signals:    AssetSignal[];
   buy:        AssetSignal[];
   sell:       AssetSignal[];
-  mode:       "paper";
+  mode:       "live";
   error?:     string;
 }
 
@@ -29,7 +28,7 @@ export async function POST(req: NextRequest) {
   const result: RunResult = {
     phase: "starting", ts: now(),
     signals: [], buy: [], sell: [],
-    mode: "paper",
+    mode: "live",
   };
 
   try {

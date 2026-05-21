@@ -25,8 +25,8 @@ const PORTFOLIO_HISTORY = [
   { date: "Sep", value: 12847 },
 ];
 
-// Demo positions — entry prices baked in; live prices update current value
-const DEMO_POSITIONS = [
+// Default positions — entry prices baked in; live prices update current value
+const DEFAULT_POSITIONS = [
   { sym: "NVDA", name: "NVIDIA Corp",    shares: 2.4,   entry: 875.39  },
   { sym: "BTC",  name: "Bitcoin",        shares: 0.031, entry: 68240   },
   { sym: "MSFT", name: "Microsoft",      shares: 4.1,   entry: 414.67  },
@@ -104,7 +104,7 @@ export default function PortfolioPage() {
     return () => clearInterval(iv);
   }, [fetchPortfolioNews]);
 
-  // Use paper portfolio if the user has positions, else show demo data
+  // Use live portfolio positions if available
   const positions = useMemo(() => {
     if (paper.positions.length > 0) {
       return paper.positions.map(p => ({
@@ -116,7 +116,7 @@ export default function PortfolioPage() {
         entry:  p.avgEntry,
       }));
     }
-    return DEMO_POSITIONS.map(p => {
+    return DEFAULT_POSITIONS.map(p => {
       if (p.sym === "CASH") return { ...p, value: p.entry, change: 0 };
       const px = prices[p.sym];
       const livePrice = px?.priceNum ?? p.entry;

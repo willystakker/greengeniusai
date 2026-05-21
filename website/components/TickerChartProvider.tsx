@@ -548,8 +548,8 @@ function ChartModal({ sym, onClose }: { sym: string; onClose: () => void }) {
                 <div className="flex items-start gap-2 p-3 rounded-lg border border-yellow-500/20 bg-yellow-500/5">
                   <AlertTriangle size={12} className="text-yellow-400 flex-shrink-0 mt-0.5" />
                   <p className="text-[10px] text-genius-muted leading-relaxed">
-                    Orders route through your connected Alpaca broker. Paper trading mode active by default.
-                    Go to <a href="/dashboard/settings?section=broker" className="text-genius-green hover:underline">Settings → Broker</a> to switch to live.
+                    Orders route through your connected Alpaca broker account.
+                    Go to <a href="/dashboard/settings?section=broker" className="text-genius-green hover:underline">Settings → Broker</a> to manage your connection.
                   </p>
                 </div>
               </div>

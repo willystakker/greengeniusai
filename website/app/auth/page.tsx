@@ -198,7 +198,7 @@ export default function AuthPage() {
             ))}
           </div>
         </div>
-        <p className="relative z-10 text-xs text-genius-muted">© 2026 GreenGeniusAI · Paper trading platform</p>
+        <p className="relative z-10 text-xs text-genius-muted">© 2026 GreenGeniusAI · AI-Powered Trading</p>
       </div>
 
       {/* Right panel */}
