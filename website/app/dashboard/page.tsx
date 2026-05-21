@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Brain, TrendingUp, DollarSign, Bell, Plus,
   Activity, Zap, CheckCircle, AlertTriangle, X,
-  List, ChevronRight,
+  List, ChevronRight, RefreshCw,
 } from "lucide-react";
+import { useLivePrices } from "@/lib/hooks/useLivePrices";
+import { useLivePortfolio } from "@/lib/hooks/useLivePortfolio";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart as RPieChart, Pie, Cell,
@@ -22,14 +24,15 @@ const PORTFOLIO_HISTORY = [
   { date: "Sep", value: 12847 },
 ];
 
-const POSITIONS = [
-  { sym: "NVDA", name: "NVIDIA Corp",    shares: 2.4,   value: 2100.94, change: +4.82, weight: 16.3 },
-  { sym: "BTC",  name: "Bitcoin",        shares: 0.031, value: 2115.44, change: +3.41, weight: 16.5 },
-  { sym: "MSFT", name: "Microsoft",      shares: 4.1,   value: 1700.15, change: +1.07, weight: 13.2 },
-  { sym: "SOL",  name: "Solana",         shares: 9.7,   value: 1730.88, change: +5.11, weight: 13.5 },
-  { sym: "AAPL", name: "Apple Inc",      shares: 7.2,   value: 1363.82, change: +2.14, weight: 10.6 },
-  { sym: "META", name: "Meta Platforms", shares: 1.8,   value:  950.60, change: +2.08, weight:  7.4 },
-  { sym: "CASH", name: "Cash & Equiv",   shares: 1,     value:  885.50, change:     0, weight:  6.9 },
+// Demo positions — entry prices baked in; live prices update current value
+const DEMO_POSITIONS = [
+  { sym: "NVDA", name: "NVIDIA Corp",    shares: 2.4,   entry: 875.39  },
+  { sym: "BTC",  name: "Bitcoin",        shares: 0.031, entry: 68240   },
+  { sym: "MSFT", name: "Microsoft",      shares: 4.1,   entry: 414.67  },
+  { sym: "SOL",  name: "Solana",         shares: 9.7,   entry: 178.44  },
+  { sym: "AAPL", name: "Apple Inc",      shares: 7.2,   entry: 189.42  },
+  { sym: "META", name: "Meta Platforms", shares: 1.8,   entry: 528.11  },
+  { sym: "CASH", name: "Cash & Equiv",   shares: 1,     entry: 885.50  },
 ];
 
 const RECENT_TRADES = [
@@ -60,11 +63,13 @@ function ChartTooltip({ active, payload }: any) {
 
 export default function PortfolioPage() {
   const router = useRouter();
-  const [activeTab,       setActiveTab]       = useState<"positions"|"trades"|"insights">("positions");
-  const [portfolioValue,  setPortfolioValue]  = useState(12847.33);
-  const [selectedTrade,   setSelectedTrade]   = useState<(typeof RECENT_TRADES)[0] | null>(null);
-  const [userName,        setUserName]        = useState("Investor");
-  const [notifications,   setNotifications]   = useState(3);
+  const [activeTab,     setActiveTab]     = useState<"positions"|"trades"|"insights">("positions");
+  const [selectedTrade, setSelectedTrade] = useState<(typeof RECENT_TRADES)[0] | null>(null);
+  const [userName,      setUserName]      = useState("Investor");
+  const [notifications, setNotifications] = useState(3);
+
+  const { prices, loading: pricesLoading, lastUpdated, pulse } = useLivePrices(20000);
+  const { portfolio } = useLivePortfolio(30000);
 
   useEffect(() => {
     const user = getUser();
@@ -72,15 +77,37 @@ export default function PortfolioPage() {
     setUserName(user.name || "Investor");
   }, [router]);
 
-  useEffect(() => {
-    const iv = setInterval(() => {
-      setPortfolioValue(v => Math.max(11000, +(v + (Math.random() - 0.3) * 12).toFixed(2)));
-    }, 2500);
-    return () => clearInterval(iv);
-  }, []);
+  // Build live positions: use Alpaca data if connected, otherwise demo + live prices
+  const positions = useMemo(() => {
+    if (portfolio?.connected && portfolio.positions?.length) {
+      return portfolio.positions.map(p => ({
+        sym:    p.sym,
+        name:   p.sym,
+        shares: parseFloat(p.qty),
+        value:  p.value,
+        change: p.plPct,
+        entry:  p.entry,
+      }));
+    }
+    return DEMO_POSITIONS.map(p => {
+      if (p.sym === "CASH") return { ...p, value: p.entry, change: 0 };
+      const px = prices[p.sym];
+      const livePrice = px?.priceNum ?? p.entry;
+      const value     = +(p.shares * livePrice).toFixed(2);
+      const change    = px?.changePct ?? 0;
+      return { ...p, value, change };
+    });
+  }, [prices, portfolio]);
 
-  const gain    = portfolioValue - 11000;
-  const gainPct = ((gain / 11000) * 100).toFixed(2);
+  const totalValue = positions.reduce((s, p) => s + p.value, 0);
+  const todayGain  = positions.reduce((s, p) => {
+    if (p.sym === "CASH") return s;
+    const prevValue = p.value / (1 + p.change / 100);
+    return s + (p.value - prevValue);
+  }, 0);
+  const allTimeGain    = totalValue - 11000;
+  const allTimeGainPct = ((allTimeGain / 11000) * 100).toFixed(2);
+  const portfolioValue = portfolio?.connected ? (portfolio.portfolio_value ?? totalValue) : totalValue;
 
   return (
     <div className="space-y-6">
@@ -88,7 +115,10 @@ export default function PortfolioPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black text-white">Welcome back, {userName.split(" ")[0]}</h1>
-          <p className="text-xs text-genius-muted font-mono mt-0.5">Last synced: just now · {new Date().toLocaleDateString()}</p>
+          <p className="text-xs text-genius-muted font-mono mt-0.5 flex items-center gap-1.5">
+          {pricesLoading ? <RefreshCw size={10} className="animate-spin" /> : <span className={`w-1.5 h-1.5 rounded-full inline-block ${pulse ? "bg-genius-green" : "bg-genius-green/60"}`} />}
+          {lastUpdated ? `Live · updated ${lastUpdated.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit"})}` : "Connecting to live feed…"}
+        </p>
         </div>
         <div className="flex items-center gap-3">
           <button className="relative p-2 rounded-lg border border-genius-border hover:border-genius-green transition-colors">
@@ -108,9 +138,9 @@ export default function PortfolioPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: "Total Portfolio", value: `$${portfolioValue.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`, sub: `+${gainPct}% all time`, up: true,  icon: DollarSign },
-          { label: "Today's Gain",    value: "+$342.18",  sub: "+2.73% today",           up: true,  icon: TrendingUp },
-          { label: "Open Positions",  value: "6",         sub: "across 2 asset classes", up: null,  icon: List },
+          { label: "Total Portfolio", value: `$${portfolioValue.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`, sub: `${allTimeGain>=0?"+":""}${allTimeGainPct}% all time`, up: allTimeGain>=0, icon: DollarSign },
+          { label: "Today's Gain",    value: `${todayGain>=0?"+":"-"}$${Math.abs(todayGain).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`, sub: `${todayGain>=0?"+":""}${((todayGain/totalValue)*100).toFixed(2)}% today`, up: todayGain>=0, icon: TrendingUp },
+          { label: "Open Positions",  value: String(positions.filter(p=>p.sym!=="CASH").length), sub: "across 2 asset classes", up: null, icon: List },
           { label: "AI Trades (30d)", value: "47",        sub: "78.4% win rate",          up: true,  icon: Zap },
         ].map((k, i) => (
           <div key={i} className="genius-card rounded-xl p-4">
@@ -156,18 +186,18 @@ export default function PortfolioPage() {
         <div className="genius-card rounded-xl p-5">
           <h2 className="font-bold text-white mb-4">Allocation</h2>
           <RPieChart width={180} height={150}>
-            <Pie data={POSITIONS.filter(p=>p.sym!=="CASH")} cx={90} cy={70} innerRadius={45} outerRadius={70} paddingAngle={2} dataKey="weight">
-              {POSITIONS.filter(p=>p.sym!=="CASH").map((_,i) => <Cell key={i} fill={PIE_COLORS[i%PIE_COLORS.length]} />)}
+            <Pie data={positions.filter(p=>p.sym!=="CASH").map(p=>({...p,weight:+((p.value/totalValue)*100).toFixed(1)}))} cx={90} cy={70} innerRadius={45} outerRadius={70} paddingAngle={2} dataKey="weight">
+              {positions.filter(p=>p.sym!=="CASH").map((_,i) => <Cell key={i} fill={PIE_COLORS[i%PIE_COLORS.length]} />)}
             </Pie>
           </RPieChart>
           <div className="flex flex-col gap-1.5 mt-2">
-            {POSITIONS.slice(0,5).map((p,i) => (
+            {positions.slice(0,5).map((p,i) => (
               <div key={p.sym} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-1.5">
                   <div className="w-2 h-2 rounded-full" style={{background:PIE_COLORS[i]}} />
                   <span className="text-genius-muted font-mono">{p.sym}</span>
                 </div>
-                <span className="text-white font-mono">{p.weight}%</span>
+                <span className="text-white font-mono">{+((p.value/totalValue)*100).toFixed(1)}%</span>
               </div>
             ))}
           </div>
@@ -219,40 +249,48 @@ export default function PortfolioPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-genius-border">
-                {["Asset","Shares","Value","Change","Weight","Action"].map(h => (
+                {["Asset","Shares","Value","Today","Weight","Action"].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs text-genius-muted font-mono">{h.toUpperCase()}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {POSITIONS.map(p => (
-                <tr key={p.sym} className="border-b border-genius-border/50 hover:bg-genius-card transition-colors">
-                  <td className="px-4 py-3"><p className="font-bold text-white font-mono">{p.sym}</p><p className="text-xs text-genius-muted">{p.name}</p></td>
-                  <td className="px-4 py-3 font-mono text-genius-text">{p.shares}</td>
-                  <td className="px-4 py-3 font-mono font-bold text-white">${p.value.toLocaleString()}</td>
-                  <td className="px-4 py-3">
-                    <span className={`font-mono font-bold text-xs px-2 py-1 rounded ${p.change>0?"bg-genius-green/10 text-genius-green":p.change<0?"bg-red-500/10 text-red-400":"bg-genius-border text-genius-muted"}`}>
-                      {p.change>0?"+":""}{p.change}%
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 h-1.5 bg-genius-border rounded-full overflow-hidden">
-                        <div className="h-full bg-genius-green rounded-full" style={{width:`${p.weight}%`}} />
+              {positions.map(p => {
+                const weight = +((p.value / totalValue) * 100).toFixed(1);
+                return (
+                  <tr key={p.sym} className="border-b border-genius-border/50 hover:bg-genius-card transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="font-bold text-white font-mono">{p.sym}</p>
+                      <p className="text-xs text-genius-muted">{p.name}</p>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-genius-text">{p.shares}</td>
+                    <td className="px-4 py-3 font-mono font-bold text-white">
+                      ${p.value.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`font-mono font-bold text-xs px-2 py-1 rounded ${p.change>0?"bg-genius-green/10 text-genius-green":p.change<0?"bg-red-500/10 text-red-400":"bg-genius-border text-genius-muted"}`}>
+                        {p.change>0?"+":""}{p.change.toFixed(2)}%
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 h-1.5 bg-genius-border rounded-full overflow-hidden">
+                          <div className="h-full bg-genius-green rounded-full" style={{width:`${Math.min(weight*3,100)}%`}} />
+                        </div>
+                        <span className="text-xs font-mono text-genius-muted">{weight}%</span>
                       </div>
-                      <span className="text-xs font-mono text-genius-muted">{p.weight}%</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    {p.sym!=="CASH" && (
-                      <div className="flex gap-2">
-                        <button className="px-2 py-1 rounded bg-genius-green/10 text-genius-green text-xs font-bold border border-genius-green/20 hover:bg-genius-green/20">+</button>
-                        <button className="px-2 py-1 rounded bg-red-500/10 text-red-400 text-xs font-bold border border-red-500/20 hover:bg-red-500/20">−</button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 py-3">
+                      {p.sym!=="CASH" && (
+                        <div className="flex gap-2">
+                          <button className="px-2 py-1 rounded bg-genius-green/10 text-genius-green text-xs font-bold border border-genius-green/20 hover:bg-genius-green/20">+</button>
+                          <button className="px-2 py-1 rounded bg-red-500/10 text-red-400 text-xs font-bold border border-red-500/20 hover:bg-red-500/20">−</button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

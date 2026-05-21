@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Brain, TrendingUp, TrendingDown, Activity, AlertTriangle,
   Globe, BarChart3, RefreshCw, ChevronUp, ChevronDown, Cpu,
 } from "lucide-react";
 import { getBotConfig, getActiveSymbols, type BotConfig } from "@/lib/bot-config";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip } from "recharts";
+import { useLivePrices } from "@/lib/hooks/useLivePrices";
+import { useLiveMarket } from "@/lib/hooks/useLiveMarket";
 
 const SIGNALS = [
   { sym: "NVDA", name: "NVIDIA Corp",    rating: "STRONG BUY", confidence: 94, target: 1050, current: 875, upside: "+19.9%", reason: "AI infrastructure supercycle; data center rev +427% YoY; H100 backlog extends 12 months", sector: "Tech" },
@@ -61,21 +63,73 @@ const RATING_COLOR: Record<string, string> = {
 };
 
 export default function InsightsPage() {
-  const [tab, setTab]       = useState<"signals"|"sectors"|"macro">("signals");
-  const [lastUpdated, setLastUpdated] = useState("just now");
-  const [refreshing, setRefreshing]   = useState(false);
-  const [botCfg,      setBotCfg]      = useState<BotConfig | null>(null);
+  const [tab,    setTab]    = useState<"signals"|"sectors"|"macro">("signals");
+  const [botCfg, setBotCfg] = useState<BotConfig | null>(null);
+  const [liveSignals,   setLiveSignals]   = useState<any[]>([]);
+  const [signalsLoaded, setSignalsLoaded] = useState(false);
+
+  const { prices, lastUpdated: pricesUpdated, loading: pricesLoading } = useLivePrices(20000);
+  const { market } = useLiveMarket(30000);
 
   useEffect(() => { setBotCfg(getBotConfig()); }, []);
 
-  const handleRefresh = () => {
-    setRefreshing(true);
-    setBotCfg(getBotConfig());
-    setTimeout(() => { setRefreshing(false); setLastUpdated("just now"); }, 1200);
-  };
+  // Fetch real AI signals every 60s
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const risk = getBotConfig().riskProfile ?? "moderate";
+        const res  = await fetch(`/api/signals?groups=US+Stocks,Crypto,ETFs,Growth&risk=${risk}`);
+        if (res.ok) { setLiveSignals(await res.json()); setSignalsLoaded(true); }
+      } catch {}
+    };
+    load();
+    const iv = setInterval(load, 60000);
+    return () => clearInterval(iv);
+  }, []);
 
   const threshold  = botCfg?.confidenceThreshold ?? 80;
   const activeSyms = botCfg ? new Set(getActiveSymbols(botCfg.assetUniverse)) : null;
+
+  // Merge live prices into static signals (override current price + recalculate upside)
+  const signals = useMemo(() => {
+    const base = liveSignals.length > 0 ? liveSignals.map((s: any) => ({
+      sym: s.sym, name: s.sym, rating: s.action === "BUY" ? (s.confidence >= 90 ? "STRONG BUY" : "BUY") : s.action === "SELL" ? "SELL" : "HOLD",
+      confidence: s.confidence, current: s.price, target: +(s.price * 1.15).toFixed(0),
+      upside: "+15%", reason: s.reasons?.join("; ") ?? "", sector: "Market",
+    })) : SIGNALS;
+    return base.map(s => {
+      const px = prices[s.sym] ?? prices[s.sym + "-USD"];
+      if (!px) return s;
+      const livePrice = px.priceNum;
+      const upside    = (((s.target - livePrice) / livePrice) * 100).toFixed(1);
+      return { ...s, current: livePrice, upside: `${+upside >= 0 ? "+" : ""}${upside}%` };
+    });
+  }, [liveSignals, prices]);
+
+  // Live sectors from /api/market
+  const sectors = useMemo(() => {
+    if (!market?.sectors?.length) return SECTORS;
+    return market.sectors.slice(0, 8).map((s: any) => ({
+      name: s.name, perf: s.changePct,
+      color: s.changePct >= 0 ? "#00FF41" : "#FF6B6B",
+    }));
+  }, [market]);
+
+  // Live macro from /api/market
+  const macro = useMemo(() => {
+    if (!market) return MACRO;
+    const vix = market.vix ?? 18.4;
+    return [
+      { label: "Fed Funds Rate", value: "5.25%",   delta: "0bp",   trend: null,   note: "Next meeting Jun 12" },
+      { label: "10Y Treasury",   value: "4.48%",   delta: "+3bp",  trend: "up",   note: "Yield curve watch" },
+      { label: "VIX",            value: vix.toFixed(1), delta: vix < 20 ? "Low" : vix < 30 ? "Elevated" : "High", trend: vix < 18 ? "down" : "up", note: vix < 20 ? "Low volatility" : "Watch risk" },
+      { label: "Fear & Greed",   value: String(market.fearGreed ?? 50), delta: market.fearGreed > 60 ? "Greed" : market.fearGreed < 40 ? "Fear" : "Neutral", trend: market.fearGreed > 50 ? "up" : "down", note: "Sentiment index" },
+      ...(market.indices?.find((i: any) => i.sym === "GC=F") ? [{ label: "Gold", value: `$${market.indices.find((i: any)=>i.sym==="GC=F")?.price?.toLocaleString() ?? "---"}`, delta: `${market.indices.find((i: any)=>i.sym==="GC=F")?.changePct?.toFixed(2) ?? 0}%`, trend: null, note: "Safe haven" }] : [{ label: "Gold", value: "$2,315", delta: "-0.4%", trend: "down" as any, note: "Risk-on rotation" }]),
+      { label: "WTI Crude",      value: "$81.40",  delta: "+1.1%", trend: "up",   note: "OPEC supply" },
+    ];
+  }, [market]);
+
+  const updatedStr = pricesUpdated ? pricesUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "connecting…";
 
   return (
     <div className="space-y-6">
@@ -85,10 +139,10 @@ export default function InsightsPage() {
           <h1 className="text-2xl font-black text-white">AI Intelligence Center</h1>
           <p className="text-xs text-genius-muted font-mono mt-0.5">Quantitative signals · Macro overlay · Sentiment analysis</p>
         </div>
-        <button onClick={handleRefresh}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-genius-border text-genius-muted hover:text-genius-green hover:border-genius-green transition-all text-sm font-semibold">
-          <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} /> Refresh
-        </button>
+        <div className="flex items-center gap-2 text-xs font-mono text-genius-muted">
+          {pricesLoading ? <RefreshCw size={11} className="animate-spin text-genius-green" /> : <span className="w-2 h-2 rounded-full bg-genius-green animate-pulse inline-block" />}
+          {updatedStr}
+        </div>
       </div>
 
       {/* Market Regime Banner */}
@@ -96,7 +150,7 @@ export default function InsightsPage() {
         <div className="flex items-center gap-3 mb-3">
           <div className="live-dot" />
           <span className="text-xs font-mono font-bold text-genius-green">MARKET REGIME · LIVE</span>
-          <span className="ml-auto text-xs text-genius-muted font-mono">Updated {lastUpdated}</span>
+          <span className="ml-auto text-xs text-genius-muted font-mono">Updated {updatedStr}</span>
         </div>
         <div className="grid grid-cols-4 gap-6">
           <div className="col-span-3">
@@ -162,7 +216,7 @@ export default function InsightsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {SIGNALS.map(s => {
+                  {signals.map(s => {
                     const inUniverse = !activeSyms || activeSyms.has(s.sym);
                     const meetsThreshold = s.confidence >= threshold;
                     const botWillTrade = inUniverse && meetsThreshold;
@@ -210,7 +264,7 @@ export default function InsightsPage() {
           {tab === "sectors" && (
             <div className="p-5">
               <div className="grid grid-cols-2 gap-3 mb-5">
-                {SECTORS.map(s => (
+                {sectors.map(s => (
                   <div key={s.name} className="flex items-center justify-between p-3 rounded-lg bg-genius-black border border-genius-border hover:border-genius-green/30 transition-colors">
                     <div className="flex items-center gap-3">
                       <div className="w-2.5 h-10 rounded-full" style={{background: s.perf > 0 ? "#00FF41" : "#FF4444", opacity: Math.abs(s.perf) > 2 ? 1 : 0.5 + Math.abs(s.perf)*0.25}} />
@@ -235,7 +289,7 @@ export default function InsightsPage() {
           {tab === "macro" && (
             <div className="p-5">
               <div className="grid grid-cols-2 gap-3">
-                {MACRO.map(m => (
+                {macro.map(m => (
                   <div key={m.label} className="bg-genius-black rounded-xl p-4 border border-genius-border">
                     <div className="flex items-center justify-between mb-1">
                       <p className="text-xs text-genius-muted font-mono">{m.label}</p>

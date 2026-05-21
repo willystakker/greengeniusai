@@ -1,22 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { getBotConfig, nextRebalanceDate, type BotConfig } from "@/lib/bot-config";
 import { RefreshCw, TrendingUp, AlertTriangle, CheckCircle, Sliders } from "lucide-react";
+import { useLivePrices } from "@/lib/hooks/useLivePrices";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 
-const POSITIONS = [
-  { sym: "NVDA", name: "NVIDIA Corp",    value: 2100.94, target: 15, actual: 16.3, class: "Equity",  color: "#00FF41" },
-  { sym: "BTC",  name: "Bitcoin",        value: 2115.44, target: 15, actual: 16.5, class: "Crypto",  color: "#00D97E" },
-  { sym: "MSFT", name: "Microsoft",      value: 1700.15, target: 14, actual: 13.2, class: "Equity",  color: "#7FFF00" },
-  { sym: "SOL",  name: "Solana",         value: 1730.88, target: 12, actual: 13.5, class: "Crypto",  color: "#00BCD4" },
-  { sym: "AAPL", name: "Apple Inc",      value: 1363.82, target: 12, actual: 10.6, class: "Equity",  color: "#FFD700" },
-  { sym: "META", name: "Meta Platforms", value:  950.60, target: 8,  actual:  7.4, class: "Equity",  color: "#FF6B6B" },
-  { sym: "AMD",  name: "AMD",            value:  720.00, target: 7,  actual:  5.6, class: "Equity",  color: "#C084FC" },
-  { sym: "ETH",  name: "Ethereum",       value:  505.00, target: 8,  actual:  3.9, class: "Crypto",  color: "#38BDF8" },
-  { sym: "CASH", name: "Cash & Equiv",   value:  885.50, target: 9,  actual:  6.9, class: "Cash",    color: "#4A7A4A" },
+const BASE_POSITIONS = [
+  { sym: "NVDA", name: "NVIDIA Corp",    shares: 2.4,   entry: 875.39, target: 15, class: "Equity",  color: "#00FF41" },
+  { sym: "BTC",  name: "Bitcoin",        shares: 0.031, entry: 68240,  target: 15, class: "Crypto",  color: "#00D97E" },
+  { sym: "MSFT", name: "Microsoft",      shares: 4.1,   entry: 414.67, target: 14, class: "Equity",  color: "#7FFF00" },
+  { sym: "SOL",  name: "Solana",         shares: 9.7,   entry: 178.44, target: 12, class: "Crypto",  color: "#00BCD4" },
+  { sym: "AAPL", name: "Apple Inc",      shares: 7.2,   entry: 189.42, target: 12, class: "Equity",  color: "#FFD700" },
+  { sym: "META", name: "Meta Platforms", shares: 1.8,   entry: 528.11, target: 8,  class: "Equity",  color: "#FF6B6B" },
+  { sym: "AMD",  name: "AMD",            shares: 4.8,   entry: 150.00, target: 7,  class: "Equity",  color: "#C084FC" },
+  { sym: "ETH",  name: "Ethereum",       shares: 0.13,  entry: 3884,   target: 8,  class: "Crypto",  color: "#38BDF8" },
+  { sym: "CASH", name: "Cash & Equiv",   shares: 1,     entry: 885.50, target: 9,  class: "Cash",    color: "#4A7A4A" },
 ];
 
 const CLASS_COLORS: Record<string,string> = { Equity: "#00FF41", Crypto: "#00D97E", Cash: "#4A7A4A" };
@@ -39,11 +40,23 @@ export default function AllocationPage() {
   const [rebalancing,    setRebalancing]    = useState(false);
   const [botCfg,         setBotCfg]         = useState<BotConfig | null>(null);
 
+  const { prices, lastUpdated } = useLivePrices(20000);
+
   useEffect(() => {
     const cfg = getBotConfig();
     setBotCfg(cfg);
     setAutoRebalance(cfg.botActive);
   }, []);
+
+  const POSITIONS = useMemo(() => {
+    const live = BASE_POSITIONS.map(p => {
+      if (p.sym === "CASH") return { ...p, value: p.entry };
+      const px = prices[p.sym];
+      return { ...p, value: px ? +(p.shares * px.priceNum).toFixed(2) : +(p.shares * p.entry).toFixed(2) };
+    });
+    const total = live.reduce((s, p) => s + p.value, 0);
+    return live.map(p => ({ ...p, actual: +((p.value / total) * 100).toFixed(1) }));
+  }, [prices]);
 
   const totalValue = POSITIONS.reduce((s, p) => s + p.value, 0);
 
