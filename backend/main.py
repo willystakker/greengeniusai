@@ -28,16 +28,16 @@ async def lifespan(app: FastAPI):
     logger.info("GreenGeniusAI backend starting...")
     await market_service.start()
 
-    # Schedule AI trading scans every 5 minutes during market hours
+    # Market scan every 20 minutes during market hours (saves ~75% on API costs vs every 5 min)
     scheduler.add_job(
         ai_engine.run_market_scan,
         "cron",
         day_of_week="mon-fri",
         hour="9-16",
-        minute="*/5",
+        minute="*/20",
         id="market_scan",
     )
-    # After-hours analysis at 6 PM ET
+    # After-hours deep analysis once at 6 PM ET
     scheduler.add_job(
         ai_engine.run_afterhours_analysis,
         "cron",
@@ -46,11 +46,11 @@ async def lifespan(app: FastAPI):
         minute=0,
         id="afterhours_analysis",
     )
-    # Crypto runs 24/7 — scan every 10 minutes
+    # Crypto scan every 30 minutes 24/7
     scheduler.add_job(
         ai_engine.run_crypto_scan,
         "interval",
-        minutes=10,
+        minutes=30,
         id="crypto_scan",
     )
     scheduler.start()

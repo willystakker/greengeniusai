@@ -116,9 +116,13 @@ Provide your full analysis and a decisive trade recommendation.
 
     async def run_market_scan(self):
         """Scheduled: scan all watched assets and fire trades for active bot users."""
-        logger.info("Running AI market scan...")
-        # In production: get all users with bot_active=True from DB
-        # For each user, get their watchlist and portfolio, run analysis, execute if confident
+        # Skip entirely if no users have the bot active — saves API cost
+        active_users = await self._get_active_bot_users()
+        if not active_users:
+            logger.debug("Market scan skipped — no active bot users")
+            return
+
+        logger.info(f"Running AI market scan for {len(active_users)} active user(s)...")
         watchlist = ["NVDA", "MSFT", "AAPL", "GOOGL", "META", "AMZN", "TSLA", "AMD"]
         for ticker in watchlist:
             try:
@@ -129,11 +133,16 @@ Provide your full analysis and a decisive trade recommendation.
                     # In production: loop through eligible users and execute trades
             except Exception as e:
                 logger.error(f"Scan error for {ticker}: {e}")
-            await asyncio.sleep(0.5)  # Rate limit
+            await asyncio.sleep(0.5)  # Polygon rate limit
 
     async def run_crypto_scan(self):
         """Scheduled: scan crypto markets 24/7."""
-        logger.info("Running crypto scan...")
+        active_users = await self._get_active_bot_users()
+        if not active_users:
+            logger.debug("Crypto scan skipped — no active bot users")
+            return
+
+        logger.info(f"Running crypto scan for {len(active_users)} active user(s)...")
         crypto_tickers = ["BTC/USD", "ETH/USD", "SOL/USD", "AVAX/USD"]
         for ticker in crypto_tickers:
             try:
@@ -234,6 +243,12 @@ Output as structured JSON.
             }],
         )
         return response.content[0].text
+
+    async def _get_active_bot_users(self) -> list:
+        """Return list of users with bot_active=True. Returns empty list until DB is wired up."""
+        # TODO: replace with real Supabase query once DB is connected
+        # e.g. return await db.fetch("SELECT id FROM users WHERE bot_active = TRUE")
+        return []
 
     async def _quick_scan(self, ticker: str, market_data: dict) -> Optional[dict]:
         """Fast lightweight scan to filter for high-conviction signals."""

@@ -35,16 +35,18 @@ export async function GET(req: NextRequest) {
   try {
     const [chartRes, quoteRes] = await Promise.all([
       yf.chart(yahooSym, { period1, interval: cfg.interval as any }),
-      yf.quote(yahooSym, { fields: ["regularMarketPrice","regularMarketChangePercent","regularMarketOpen","regularMarketDayHigh","regularMarketDayLow","regularMarketVolume","marketCap","shortName","longName"] }),
+      yf.quote(yahooSym, { fields: ["regularMarketPrice","regularMarketChangePercent","regularMarketOpen","regularMarketDayHigh","regularMarketDayLow","regularMarketVolume","marketCap","shortName","longName","fiftyTwoWeekHigh","fiftyTwoWeekLow","trailingPE","forwardPE","trailingAnnualDividendYield","averageAnalystRating"] }),
     ]);
 
     const quotes = (chartRes.quotes ?? [])
       .filter((q: any) => q.close != null)
       .map((q: any) => ({
         t: new Date(q.date).toLocaleString("en-US", cfg.fmt),
+        timestamp: Math.floor(new Date(q.date).getTime() / 1000),
+        o: q.open  ? +q.open.toFixed(2)  : null,
+        h: q.high  ? +q.high.toFixed(2)  : null,
+        l: q.low   ? +q.low.toFixed(2)   : null,
         c: +q.close.toFixed(2),
-        h: q.high ? +q.high.toFixed(2) : null,
-        l: q.low  ? +q.low.toFixed(2)  : null,
         v: q.volume ?? null,
       }));
 
@@ -53,14 +55,20 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       sym,
-      name:      (q as any).longName ?? (q as any).shortName ?? meta.longName ?? sym,
-      price:     (q as any).regularMarketPrice ?? meta.regularMarketPrice,
-      changePct: (q as any).regularMarketChangePercent ?? 0,
-      open:      (q as any).regularMarketOpen,
-      high:      (q as any).regularMarketDayHigh,
-      low:       (q as any).regularMarketDayLow,
-      volume:    (q as any).regularMarketVolume,
-      marketCap: (q as any).marketCap,
+      name:             (q as any).longName ?? (q as any).shortName ?? meta.longName ?? sym,
+      price:            (q as any).regularMarketPrice ?? meta.regularMarketPrice,
+      changePct:        (q as any).regularMarketChangePercent ?? 0,
+      open:             (q as any).regularMarketOpen,
+      high:             (q as any).regularMarketDayHigh,
+      low:              (q as any).regularMarketDayLow,
+      volume:           (q as any).regularMarketVolume,
+      marketCap:        (q as any).marketCap,
+      fiftyTwoWeekHigh: (q as any).fiftyTwoWeekHigh,
+      fiftyTwoWeekLow:  (q as any).fiftyTwoWeekLow,
+      trailingPE:       (q as any).trailingPE,
+      forwardPE:        (q as any).forwardPE,
+      dividendYield:    (q as any).trailingAnnualDividendYield,
+      analystRating:    (q as any).averageAnalystRating,
       quotes,
     }, {
       headers: { "Cache-Control": `public, s-maxage=${cfg.interval === "5m" ? 60 : 300}, stale-while-revalidate=60` },

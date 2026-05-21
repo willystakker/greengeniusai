@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   Brain, Bell, Settings, LogOut, BarChart3, Activity,
   Shield, PieChart, Zap, ToggleLeft, ToggleRight, CreditCard,
+  Star, Newspaper,
 } from "lucide-react";
 import { getUser, clearUser } from "@/lib/auth";
 import { getBotConfig } from "@/lib/bot-config";
@@ -17,6 +18,8 @@ const NAV = [
   { icon: PieChart,    label: "Allocation",    href: "/dashboard/allocation" },
   { icon: Shield,      label: "Risk Settings", href: "/dashboard/risk" },
   { icon: Bell,        label: "Alerts",        href: "/dashboard/alerts" },
+  { icon: Star,        label: "Watchlist",     href: "/dashboard/watchlist" },
+  { icon: Newspaper,   label: "News Scanner",  href: "/dashboard/news" },
   { icon: CreditCard,  label: "Billing",       href: "/dashboard/billing" },
 ];
 

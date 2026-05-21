@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Brain, TrendingUp, DollarSign, Bell, Plus,
   Activity, Zap, CheckCircle, AlertTriangle, X,
-  List, ChevronRight, RefreshCw,
+  List, ChevronRight, RefreshCw, Newspaper, ExternalLink,
 } from "lucide-react";
 import { useLivePrices } from "@/lib/hooks/useLivePrices";
 import { useLivePortfolio } from "@/lib/hooks/useLivePortfolio";
@@ -72,12 +72,37 @@ export default function PortfolioPage() {
   const { prices, loading: pricesLoading, lastUpdated, pulse } = useLivePrices(20000);
   const { portfolio } = useLivePortfolio(30000);
   const { open: openChart } = useTickerChart();
+  const [newsItems, setNewsItems] = useState<{ title: string; sym: string; sentiment: string; publisher: string; link: string; publishedAt: number }[]>([]);
+
+  // Live news feed — scan portfolio syms every 60s
+  const fetchPortfolioNews = useCallback(async () => {
+    try {
+      const syms = ["NVDA","BTC","MSFT","AAPL"];
+      const all = await Promise.all(syms.map(async sym => {
+        try {
+          const r = await fetch(`/api/news?sym=${sym}`);
+          const d = await r.json();
+          return (d.news ?? []).slice(0, 3).map((n: any) => ({ ...n, sym }));
+        } catch { return []; }
+      }));
+      const flat = all.flat();
+      flat.sort((a, b) => b.publishedAt - a.publishedAt);
+      const seen = new Set<string>();
+      setNewsItems(flat.filter(n => { if (seen.has(n.title)) return false; seen.add(n.title); return true; }).slice(0, 8));
+    } catch {}
+  }, []);
 
   useEffect(() => {
     const user = getUser();
     if (!user) { router.push("/auth"); return; }
     setUserName(user.name || "Investor");
   }, [router]);
+
+  useEffect(() => {
+    fetchPortfolioNews();
+    const iv = setInterval(fetchPortfolioNews, 60000);
+    return () => clearInterval(iv);
+  }, [fetchPortfolioNews]);
 
   // Build live positions: use Alpaca data if connected, otherwise demo + live prices
   const positions = useMemo(() => {
@@ -356,6 +381,45 @@ export default function PortfolioPage() {
           </div>
         )}
       </div>
+
+      {/* Live News Feed */}
+      {newsItems.length > 0 && (
+        <div className="genius-card rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-genius-border">
+            <div className="flex items-center gap-2">
+              <div className="live-dot" />
+              <Newspaper size={14} className="text-genius-green" />
+              <h2 className="font-bold text-white text-sm">Portfolio News Feed</h2>
+              <span className="text-[10px] text-genius-muted font-mono">· scanning every 60s</span>
+            </div>
+            <Link href="/dashboard/news" className="text-xs text-genius-green hover:underline font-mono">View all →</Link>
+          </div>
+          <div className="divide-y divide-genius-border/30">
+            {newsItems.map((n, i) => (
+              <div key={i} className="flex items-start gap-3 px-5 py-3 hover:bg-genius-card transition-colors">
+                <button onClick={() => openChart(n.sym)}
+                  className="text-xs font-black font-mono text-genius-green hover:underline px-1.5 py-0.5 rounded border border-genius-green/30 bg-genius-green/10 flex-shrink-0 mt-0.5">
+                  {n.sym}
+                </button>
+                <div className="flex-1 min-w-0">
+                  <a href={n.link} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-white hover:text-genius-green transition-colors leading-snug line-clamp-2 font-medium">
+                    {n.title}
+                  </a>
+                  <p className="text-[10px] text-genius-muted font-mono mt-0.5">{n.publisher}</p>
+                </div>
+                <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded flex-shrink-0 ${
+                  n.sentiment === "bullish" ? "text-genius-green bg-genius-green/10" :
+                  n.sentiment === "bearish" ? "text-red-400 bg-red-500/10" :
+                  "text-genius-muted bg-genius-border"
+                }`}>
+                  {n.sentiment === "bullish" ? "▲" : n.sentiment === "bearish" ? "▼" : "—"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Trade detail modal */}
       {selectedTrade && (
