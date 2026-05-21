@@ -15,7 +15,10 @@ function score(title: string) {
 }
 
 export async function GET(req: NextRequest) {
-  const sym = req.nextUrl.searchParams.get("sym") ?? "AAPL";
+  const sym = (req.nextUrl.searchParams.get("sym") ?? "AAPL")
+    .replace(/[^A-Z0-9\-\.]/gi, "")
+    .slice(0, 10)
+    .toUpperCase() || "AAPL";
   try {
     const results = await (yf as any).search(sym, { newsCount: 12 });
     const news = ((results as any).news ?? []).map((item: any) => ({

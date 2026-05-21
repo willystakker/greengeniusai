@@ -25,9 +25,15 @@ function toYahooSym(sym: string): string {
   return map[sym] ?? sym;
 }
 
+const VALID_RANGES = new Set(["1D", "1W", "1M", "3M", "1Y", "5Y"]);
+
 export async function GET(req: NextRequest) {
-  const sym   = req.nextUrl.searchParams.get("sym") ?? "AAPL";
-  const range = req.nextUrl.searchParams.get("range") ?? "1M";
+  const sym = (req.nextUrl.searchParams.get("sym") ?? "AAPL")
+    .replace(/[^A-Z0-9\-\.]/gi, "")
+    .slice(0, 10)
+    .toUpperCase() || "AAPL";
+  const rawRange = (req.nextUrl.searchParams.get("range") ?? "1M").toUpperCase();
+  const range    = VALID_RANGES.has(rawRange) ? rawRange : "1M";
   const cfg   = RANGES[range] ?? RANGES["1M"];
   const period1 = new Date(Date.now() - cfg.days * 86_400_000);
   const yahooSym = toYahooSym(sym);

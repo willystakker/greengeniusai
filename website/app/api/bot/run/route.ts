@@ -47,18 +47,37 @@ export async function POST(req: NextRequest) {
     } = {};
     try { body = await req.json(); } catch {}
 
-    const alpacaKey    = (body.alpacaKey    ?? "").trim();
-    const alpacaSecret = (body.alpacaSecret ?? "").trim();
-    const alpacaPaper  = body.alpacaPaper   !== false; // default true (paper)
+    // Validate + sanitize Alpaca keys (must be alphanumeric strings, reasonable length)
+    const rawKey    = typeof body.alpacaKey    === "string" ? body.alpacaKey.trim()    : "";
+    const rawSecret = typeof body.alpacaSecret === "string" ? body.alpacaSecret.trim() : "";
+    const alpacaKey    = /^[A-Z0-9_\-]{4,128}$/i.test(rawKey)    ? rawKey    : "";
+    const alpacaSecret = /^[A-Z0-9_\-]{4,128}$/i.test(rawSecret) ? rawSecret : "";
+    const alpacaPaper  = body.alpacaPaper !== false; // default true (paper)
 
     const hasAlpaca = alpacaKey.length > 4 && alpacaSecret.length > 4;
 
-    const confidenceThreshold = body.confidenceThreshold ?? getBotConfig().confidenceThreshold ?? 80;
-    const riskProfile         = body.riskProfile         ?? getBotConfig().riskProfile         ?? "moderate";
-    const assetUniverse       = body.assetUniverse        ?? getBotConfig().assetUniverse        ?? ["US Stocks"];
-    const botActive           = body.botActive            ?? getBotConfig().botActive            ?? true;
-    const maxPositions        = body.maxPositions         ?? getBotConfig().maxPositions         ?? 10;
-    const stopLossOverride    = body.stopLossOverride     ?? getBotConfig().stopLossOverride     ?? 0;
+    // Validate numeric fields are actually numbers within sane ranges
+    const rawConfidence = Number(body.confidenceThreshold ?? getBotConfig().confidenceThreshold ?? 80);
+    const confidenceThreshold = Number.isFinite(rawConfidence) ? Math.max(0, Math.min(100, rawConfidence)) : 80;
+
+    const rawRisk  = typeof body.riskProfile === "string" ? body.riskProfile : "";
+    const riskProfile = ["conservative", "moderate", "aggressive"].includes(rawRisk)
+      ? rawRisk
+      : (getBotConfig().riskProfile ?? "moderate");
+
+    const rawUniverse = body.assetUniverse;
+    const assetUniverse = Array.isArray(rawUniverse)
+      ? (rawUniverse as unknown[]).filter(u => typeof u === "string").slice(0, 10) as string[]
+      : (getBotConfig().assetUniverse ?? ["US Stocks"]);
+
+    const rawActive = body.botActive;
+    const botActive = typeof rawActive === "boolean" ? rawActive : (getBotConfig().botActive ?? true);
+
+    const rawMaxPos    = Number(body.maxPositions ?? getBotConfig().maxPositions ?? 10);
+    const maxPositions = Number.isFinite(rawMaxPos) ? Math.max(1, Math.min(50, rawMaxPos)) : 10;
+
+    const rawStop         = Number(body.stopLossOverride ?? getBotConfig().stopLossOverride ?? 0);
+    const stopLossOverride = Number.isFinite(rawStop) ? Math.max(0, Math.min(50, rawStop)) : 0;
 
     if (!botActive) {
       return NextResponse.json({ ...result, phase: "skipped", error: "Bot is paused" });

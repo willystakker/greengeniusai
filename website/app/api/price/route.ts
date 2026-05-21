@@ -4,9 +4,10 @@ import YahooFinance from "yahoo-finance2";
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
 export async function GET(req: NextRequest) {
+  // Sanitize: max 40 symbols, each max 10 chars, alphanumeric + dash + dot only
   const syms = (req.nextUrl.searchParams.get("syms") ?? "")
     .split(",")
-    .map(s => s.trim())
+    .map(s => s.replace(/[^A-Z0-9\-\.]/gi, "").slice(0, 10).toUpperCase())
     .filter(Boolean)
     .slice(0, 40);
 

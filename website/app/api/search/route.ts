@@ -15,7 +15,11 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 export async function GET(req: NextRequest) {
-  const q = req.nextUrl.searchParams.get("q")?.trim() ?? "";
+  // Sanitize: max 20 chars, alphanumeric + common ticker/search symbols only
+  const q = (req.nextUrl.searchParams.get("q") ?? "")
+    .replace(/[^A-Z0-9\-\.\s&]/gi, "")
+    .trim()
+    .slice(0, 20);
   if (!q || q.length < 1) return NextResponse.json({ results: [] });
 
   try {

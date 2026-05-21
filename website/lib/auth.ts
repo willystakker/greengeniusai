@@ -13,10 +13,15 @@ export interface User {
   trialEnds?: string;
 }
 
-const KEY = "ggai_user";
+const KEY         = "ggai_user";
+const SESSION_AT  = "ggai_session_at";
+const SESSION_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
 export function saveUser(user: User) {
-  if (typeof window !== "undefined") localStorage.setItem(KEY, JSON.stringify(user));
+  if (typeof window !== "undefined") {
+    localStorage.setItem(KEY, JSON.stringify(user));
+    localStorage.setItem(SESSION_AT, Date.now().toString());
+  }
 }
 
 export function getUser(): User | null {
@@ -25,9 +30,21 @@ export function getUser(): User | null {
   return raw ? JSON.parse(raw) : null;
 }
 
+/** Returns true if a session exists and is still within its 24-hour client TTL. */
+export function isSessionValid(): boolean {
+  const user = getUser();
+  if (!user) return false;
+  const storedAt = localStorage.getItem(SESSION_AT);
+  if (!storedAt) return true; // legacy — allow
+  return Date.now() - parseInt(storedAt, 10) < SESSION_TTL;
+}
+
 /** Signs out: clears localStorage AND revokes the HTTP-only session cookie. */
 export async function clearUser() {
-  if (typeof window !== "undefined") localStorage.removeItem(KEY);
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(KEY);
+    localStorage.removeItem(SESSION_AT);
+  }
   try {
     await fetch("/api/auth", { method: "DELETE" });
   } catch {

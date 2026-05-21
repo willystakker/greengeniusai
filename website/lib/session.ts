@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 const SESSION_SECRET = process.env.SESSION_SECRET || "ggai-dev-secret-change-in-production";
 const COOKIE_NAME = "ggai_session";
-const MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+const MAX_AGE = 7 * 24 * 60 * 60; // 7 days
 
 export interface SessionPayload {
   id: string;
@@ -43,7 +43,7 @@ export function setSessionCookie(res: NextResponse, payload: SessionPayload): vo
   res.cookies.set(COOKIE_NAME, token, {
     httpOnly: true,       // JS cannot read this — blocks XSS token theft
     secure: true,         // HTTPS only
-    sameSite: "lax",      // CSRF protection
+    sameSite: "strict",   // strict CSRF protection
     maxAge: MAX_AGE,
     path: "/",
   });
