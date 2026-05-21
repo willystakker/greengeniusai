@@ -9,7 +9,7 @@ import {
   List, ChevronRight, RefreshCw, Newspaper, ExternalLink,
 } from "lucide-react";
 import { useLivePrices } from "@/lib/hooks/useLivePrices";
-import { useLivePortfolio } from "@/lib/hooks/useLivePortfolio";
+import { usePaperPortfolio } from "@/lib/hooks/usePaperPortfolio";
 import { useTickerChart } from "@/components/TickerChartProvider";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -70,7 +70,7 @@ export default function PortfolioPage() {
   const [notifications, setNotifications] = useState(3);
 
   const { prices, loading: pricesLoading, lastUpdated, pulse } = useLivePrices(20000);
-  const { portfolio } = useLivePortfolio(30000);
+  const paper = usePaperPortfolio(30000);
   const { open: openChart } = useTickerChart();
   const [newsItems, setNewsItems] = useState<{ title: string; sym: string; sentiment: string; publisher: string; link: string; publishedAt: number }[]>([]);
 
@@ -104,16 +104,16 @@ export default function PortfolioPage() {
     return () => clearInterval(iv);
   }, [fetchPortfolioNews]);
 
-  // Build live positions: use Alpaca data if connected, otherwise demo + live prices
+  // Use paper portfolio if the user has positions, else show demo data
   const positions = useMemo(() => {
-    if (portfolio?.connected && portfolio.positions?.length) {
-      return portfolio.positions.map(p => ({
+    if (paper.positions.length > 0) {
+      return paper.positions.map(p => ({
         sym:    p.sym,
         name:   p.sym,
-        shares: parseFloat(p.qty),
+        shares: p.shares,
         value:  p.value,
         change: p.plPct,
-        entry:  p.entry,
+        entry:  p.avgEntry,
       }));
     }
     return DEMO_POSITIONS.map(p => {
@@ -124,7 +124,7 @@ export default function PortfolioPage() {
       const change    = px?.changePct ?? 0;
       return { ...p, value, change };
     });
-  }, [prices, portfolio]);
+  }, [prices, paper.positions]);
 
   const totalValue = positions.reduce((s, p) => s + p.value, 0);
   const todayGain  = positions.reduce((s, p) => {
@@ -132,9 +132,9 @@ export default function PortfolioPage() {
     const prevValue = p.value / (1 + p.change / 100);
     return s + (p.value - prevValue);
   }, 0);
-  const allTimeGain    = totalValue - 11000;
-  const allTimeGainPct = ((allTimeGain / 11000) * 100).toFixed(2);
-  const portfolioValue = portfolio?.connected ? (portfolio.portfolio_value ?? totalValue) : totalValue;
+  const allTimeGain    = paper.positions.length > 0 ? paper.totalPl : totalValue - 11000;
+  const allTimeGainPct = paper.positions.length > 0 ? paper.totalPlPct.toFixed(2) : ((allTimeGain / 11000) * 100).toFixed(2);
+  const portfolioValue = paper.positions.length > 0 ? paper.totalValue : totalValue;
 
   return (
     <div className="space-y-6">
