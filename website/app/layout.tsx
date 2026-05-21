@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { TickerChartProvider } from "@/components/TickerChartProvider";
+import GlobalSearch from "@/components/GlobalSearch";
 
 export const metadata: Metadata = {
   title: "GreenGeniusAI — The World's Smartest AI Investor",
@@ -29,6 +30,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="bg-genius-black text-genius-text antialiased">
         <TickerChartProvider>
+          <GlobalSearch />
           {children}
         </TickerChartProvider>
       </body>
