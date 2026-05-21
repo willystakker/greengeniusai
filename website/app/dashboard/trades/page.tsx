@@ -6,6 +6,7 @@ import {
   Brain, ChevronRight, X, CheckCircle, Clock, Zap, Settings2,
 } from "lucide-react";
 import { getBotConfig, getActiveSymbols, type BotConfig } from "@/lib/bot-config";
+import { useTickerChart } from "@/components/TickerChartProvider";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell,
@@ -54,6 +55,7 @@ export default function TradesPage() {
   const [selected, setSelected] = useState<(typeof ALL_TRADES)[0] | null>(null);
   const [flash,    setFlash]    = useState(false);
   const [botCfg,   setBotCfg]   = useState<BotConfig | null>(null);
+  const { open: openChart } = useTickerChart();
 
   useEffect(() => {
     setBotCfg(getBotConfig());
@@ -169,7 +171,7 @@ export default function TradesPage() {
             {WIN_BY_ASSET.map(a => (
               <div key={a.sym}>
                 <div className="flex justify-between text-xs mb-1">
-                  <span className="font-mono font-bold text-white">{a.sym}</span>
+                  <button onClick={() => openChart(a.sym)} className="font-mono font-bold text-genius-green hover:underline">{a.sym}</button>
                   <span className={`font-mono font-bold ${a.rate >= 80 ? "text-genius-green" : a.rate >= 70 ? "text-yellow-400" : "text-red-400"}`}>{a.rate}%</span>
                 </div>
                 <div className="w-full h-1.5 bg-genius-border rounded-full overflow-hidden">
@@ -228,8 +230,8 @@ export default function TradesPage() {
                     )}
                   </div>
                 </td>
-                <td className="px-4 py-3">
-                  <p className="font-bold text-white font-mono text-sm">{t.sym}</p>
+                <td className="px-4 py-3" onClick={e => { e.stopPropagation(); openChart(t.sym); }}>
+                  <p className="font-bold text-genius-green hover:underline cursor-pointer font-mono text-sm">{t.sym}</p>
                   <p className="text-xs text-genius-muted">{t.name}</p>
                 </td>
                 <td className="px-4 py-3 font-mono text-genius-text text-sm">{t.qty}</td>
@@ -274,7 +276,7 @@ export default function TradesPage() {
             </div>
             <div className="grid grid-cols-3 gap-3 mb-5">
               {[
-                { label: "Symbol", value: selected.sym, mono: true },
+                { label: "Symbol", value: selected.sym, mono: true, clickable: true },
                 { label: "Action", value: selected.action, color: selected.action==="BUY"?"text-genius-green":"text-red-400" },
                 { label: "Qty",    value: String(selected.qty), mono: true },
                 { label: "Entry",  value: `$${selected.price.toLocaleString()}`, mono: true },
@@ -283,7 +285,10 @@ export default function TradesPage() {
               ].map(d => (
                 <div key={d.label} className="bg-genius-black rounded-lg p-3 border border-genius-border">
                   <p className="text-xs text-genius-muted font-mono mb-1">{d.label}</p>
-                  <p className={`font-bold text-sm ${(d as any).color || "text-white"} ${(d as any).mono ? "font-mono" : ""}`}>{d.value}</p>
+                  {(d as any).clickable
+                    ? <button onClick={() => openChart(selected.sym)} className="font-bold text-sm text-genius-green hover:underline font-mono">{d.value}</button>
+                    : <p className={`font-bold text-sm ${(d as any).color || "text-white"} ${(d as any).mono ? "font-mono" : ""}`}>{d.value}</p>
+                  }
                 </div>
               ))}
             </div>

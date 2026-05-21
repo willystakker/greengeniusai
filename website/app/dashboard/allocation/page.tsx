@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { getBotConfig, nextRebalanceDate, type BotConfig } from "@/lib/bot-config";
 import { RefreshCw, TrendingUp, AlertTriangle, CheckCircle, Sliders } from "lucide-react";
 import { useLivePrices } from "@/lib/hooks/useLivePrices";
+import { useTickerChart } from "@/components/TickerChartProvider";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
@@ -41,6 +42,7 @@ export default function AllocationPage() {
   const [botCfg,         setBotCfg]         = useState<BotConfig | null>(null);
 
   const { prices, lastUpdated } = useLivePrices(20000);
+  const { open: openChart } = useTickerChart();
 
   useEffect(() => {
     const cfg = getBotConfig();
@@ -184,7 +186,7 @@ export default function AllocationPage() {
                     <div className="flex items-center gap-3">
                       <div className="w-2.5 h-2.5 rounded-full" style={{background:p.color}} />
                       <div>
-                        <span className="font-bold text-white font-mono text-sm">{p.sym}</span>
+                        <button onClick={() => p.sym !== "CASH" && openChart(p.sym)} className={p.sym !== "CASH" ? "font-bold text-genius-green hover:underline font-mono text-sm" : "font-bold text-white font-mono text-sm"}>{p.sym}</button>
                         <span className="text-xs text-genius-muted ml-2">{p.name}</span>
                       </div>
                     </div>

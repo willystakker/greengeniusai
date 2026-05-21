@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useTickerChart } from "@/components/TickerChartProvider";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Brain, TrendingUp, TrendingDown, RefreshCw,
@@ -70,10 +71,10 @@ function SparkTip({ active, payload }: any) {
 }
 
 // ─── Index Card ───────────────────────────────────────────────────────────────
-function IndexCard({ quote, history }: { quote: IndexQuote; history: number[] }) {
+function IndexCard({ quote, history, onOpen }: { quote: IndexQuote; history: number[]; onOpen?: () => void }) {
   const data = history.map(v => ({ v }));
   return (
-    <div className="genius-card rounded-xl p-4 border border-genius-border hover:border-genius-green/30 transition-all">
+    <div onClick={onOpen} className={`genius-card rounded-xl p-4 border border-genius-border hover:border-genius-green/30 transition-all ${onOpen ? "cursor-pointer" : ""}`}>
       <div className="flex items-start justify-between mb-1">
         <div>
           <p className="text-genius-muted font-mono" style={{ fontSize: 10 }}>{quote.sym}</p>
@@ -105,6 +106,7 @@ function IndexCard({ quote, history }: { quote: IndexQuote; history: number[] })
 
 // ─── Flow feed ────────────────────────────────────────────────────────────────
 function FlowFeed({ events }: { events: typeof FLOW_SEED }) {
+  const { open: openChart } = useTickerChart();
   const c = (side: string) =>
     side === "BUY" || side === "CALL"
       ? "text-genius-green bg-genius-green/10 border-genius-green/20"
@@ -121,7 +123,7 @@ function FlowFeed({ events }: { events: typeof FLOW_SEED }) {
           >
             <span className="text-genius-muted w-20 flex-shrink-0">{e.time}</span>
             <span className="text-genius-muted w-20 flex-shrink-0">{e.type}</span>
-            <span className="font-black text-white w-14 flex-shrink-0">{e.sym}</span>
+            <button onClick={() => openChart(e.sym)} className="font-black text-genius-green hover:underline w-14 flex-shrink-0 text-left">{e.sym}</button>
             <span className="text-genius-green flex-1">{e.size}</span>
             <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded border ${c(e.side)}`}>{e.side}</span>
           </motion.div>
@@ -171,6 +173,7 @@ function FearGreedGauge({ score }: { score: number }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function MarketPage() {
+  const { open: openChart } = useTickerChart();
   const [data,       setData]       = useState<MarketData | null>(null);
   const [histories,  setHistories]  = useState<Record<string, number[]>>({});
   const [scanCount,  setScanCount]  = useState(10847);
@@ -383,7 +386,7 @@ export default function MarketPage() {
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 {(data?.indices ?? []).map(q => (
-                  <IndexCard key={q.sym} quote={q} history={histories[q.sym] ?? [q.raw]} />
+                  <IndexCard key={q.sym} quote={q} history={histories[q.sym] ?? [q.raw]} onOpen={() => openChart(q.sym)} />
                 ))}
               </div>
             </div>
@@ -410,7 +413,7 @@ export default function MarketPage() {
                         <div className="flex justify-between text-xs mb-1">
                           <span className="text-genius-muted">{s.name}</span>
                           <div className="flex items-center gap-2">
-                            <span className="text-genius-muted" style={{ fontSize: 9 }}>{s.sym}</span>
+                            <button onClick={() => openChart(s.sym)} className="text-genius-muted hover:text-genius-green transition-colors font-mono" style={{ fontSize: 9 }}>{s.sym}</button>
                             <span className={`font-bold w-16 text-right ${up ? "text-genius-green" : "text-red-400"}`}>
                               {up ? "+" : ""}{s.change.toFixed(2)}%
                             </span>
@@ -472,7 +475,9 @@ export default function MarketPage() {
                   <tbody>
                     {[...SIGNALS].sort((a, b) => b.conf - a.conf).map((s, i) => (
                       <tr key={i} className="border-b border-genius-border/40 hover:bg-genius-green/3 transition-colors">
-                        <td className="px-5 py-4 font-black text-white">{s.sym}</td>
+                        <td className="px-5 py-4 font-black text-white">
+                          <button onClick={() => openChart(s.sym)} className="text-genius-green hover:underline font-mono font-black">{s.sym}</button>
+                        </td>
                         <td className="px-5 py-4">
                           <span className={`px-2.5 py-1 rounded font-bold ${
                             s.action === "BUY"  ? "bg-genius-green/15 text-genius-green border border-genius-green/30"  :

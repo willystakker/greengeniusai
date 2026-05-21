@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import YahooFinance from "yahoo-finance2";
 
-const yf = new YahooFinance();
+const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 const SYMBOLS = ["AAPL","NVDA","TSLA","MSFT","BTC-USD","ETH-USD","SOL-USD","SPY","AMZN","GOOGL","META","AMD"];
 
 function formatPrice(price: number): string {

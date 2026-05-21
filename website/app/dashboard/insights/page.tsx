@@ -9,6 +9,7 @@ import { getBotConfig, getActiveSymbols, type BotConfig } from "@/lib/bot-config
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { useLivePrices } from "@/lib/hooks/useLivePrices";
 import { useLiveMarket } from "@/lib/hooks/useLiveMarket";
+import { useTickerChart } from "@/components/TickerChartProvider";
 
 const SIGNALS = [
   { sym: "NVDA", name: "NVIDIA Corp",    rating: "STRONG BUY", confidence: 94, target: 1050, current: 875, upside: "+19.9%", reason: "AI infrastructure supercycle; data center rev +427% YoY; H100 backlog extends 12 months", sector: "Tech" },
@@ -70,6 +71,7 @@ export default function InsightsPage() {
 
   const { prices, lastUpdated: pricesUpdated, loading: pricesLoading } = useLivePrices(20000);
   const { market } = useLiveMarket(30000);
+  const { open: openChart } = useTickerChart();
 
   useEffect(() => { setBotCfg(getBotConfig()); }, []);
 
@@ -224,10 +226,10 @@ export default function InsightsPage() {
                     <tr key={s.sym} className={`border-b border-genius-border/40 transition-colors ${botWillTrade ? "hover:bg-genius-card" : "opacity-45 hover:opacity-65"}`}>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <div>
-                            <p className="font-bold text-white font-mono">{s.sym}</p>
+                          <button onClick={() => openChart(s.sym)} className="text-left hover:opacity-75 transition-opacity group">
+                            <p className="font-bold text-genius-green group-hover:underline font-mono">{s.sym}</p>
                             <p className="text-xs text-genius-muted">{s.name}</p>
-                          </div>
+                          </button>
                           {botWillTrade && (
                             <span className="text-xs font-mono bg-genius-green/10 text-genius-green border border-genius-green/20 px-1.5 py-0.5 rounded ml-1">BOT</span>
                           )}

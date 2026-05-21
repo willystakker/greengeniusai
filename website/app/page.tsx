@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useTickerChart } from "@/components/TickerChartProvider";
 import Link from "next/link";
 import {
   TrendingUp, TrendingDown, Brain, Shield, Zap, Bell,
@@ -194,6 +195,7 @@ const TESTIMONIALS = [
 
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function HomePage() {
+  const { open: openChart } = useTickerChart();
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeTradeIdx, setActiveTradeIdx] = useState(0);
   const [botActive, setBotActive] = useState(true);
@@ -322,14 +324,15 @@ export default function HomePage() {
         <div className="ticker-wrapper">
           <div className="ticker-track">
             {[...tickerData, ...tickerData].map((t, i) => (
-              <span key={i} className="inline-flex items-center gap-2 mr-8">
-                <span className="font-mono font-bold text-xs text-white">{t.sym}</span>
+              <button key={i} onClick={() => openChart(t.sym)}
+                className="inline-flex items-center gap-2 mr-8 hover:opacity-80 transition-opacity cursor-pointer group">
+                <span className="font-mono font-bold text-xs text-white group-hover:text-genius-green transition-colors">{t.sym}</span>
                 <span className="font-mono text-xs text-genius-muted">${t.price}</span>
                 <span className={`font-mono text-xs font-bold ${t.up ? "text-genius-green" : "text-red-400"}`}>
                   {t.up ? <TrendingUp size={10} className="inline mr-1" /> : <TrendingDown size={10} className="inline mr-1" />}
                   {t.change}
                 </span>
-              </span>
+              </button>
             ))}
           </div>
         </div>

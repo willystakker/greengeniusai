@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { TickerChartProvider } from "@/components/TickerChartProvider";
 
 export const metadata: Metadata = {
   title: "GreenGeniusAI — The World's Smartest AI Investor",
@@ -27,7 +28,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="bg-genius-black text-genius-text antialiased">
-        {children}
+        <TickerChartProvider>
+          {children}
+        </TickerChartProvider>
       </body>
     </html>
   );

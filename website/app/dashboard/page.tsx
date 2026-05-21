@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useLivePrices } from "@/lib/hooks/useLivePrices";
 import { useLivePortfolio } from "@/lib/hooks/useLivePortfolio";
+import { useTickerChart } from "@/components/TickerChartProvider";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart as RPieChart, Pie, Cell,
@@ -70,6 +71,7 @@ export default function PortfolioPage() {
 
   const { prices, loading: pricesLoading, lastUpdated, pulse } = useLivePrices(20000);
   const { portfolio } = useLivePortfolio(30000);
+  const { open: openChart } = useTickerChart();
 
   useEffect(() => {
     const user = getUser();
@@ -260,8 +262,10 @@ export default function PortfolioPage() {
                 return (
                   <tr key={p.sym} className="border-b border-genius-border/50 hover:bg-genius-card transition-colors">
                     <td className="px-4 py-3">
-                      <p className="font-bold text-white font-mono">{p.sym}</p>
-                      <p className="text-xs text-genius-muted">{p.name}</p>
+                      <button onClick={() => p.sym !== "CASH" && openChart(p.sym)} className={p.sym !== "CASH" ? "text-left hover:opacity-75 transition-opacity group" : "text-left"}>
+                        <p className={`font-bold font-mono ${p.sym !== "CASH" ? "text-genius-green group-hover:underline" : "text-white"}`}>{p.sym}</p>
+                        <p className="text-xs text-genius-muted">{p.name}</p>
+                      </button>
                     </td>
                     <td className="px-4 py-3 font-mono text-genius-text">{p.shares}</td>
                     <td className="px-4 py-3 font-mono font-bold text-white">
@@ -300,10 +304,11 @@ export default function PortfolioPage() {
             {RECENT_TRADES.map((t,i) => (
               <div key={i} className="flex items-start gap-4 p-4 rounded-xl border border-genius-border hover:border-genius-green/30 cursor-pointer transition-all"
                 onClick={() => setSelectedTrade(t)}>
+
                 <div className={`px-3 py-1.5 rounded-lg text-xs font-black font-mono flex-shrink-0 ${t.action==="BUY"?"bg-genius-green/20 text-genius-green border border-genius-green/30":"bg-red-500/20 text-red-400 border border-red-500/30"}`}>{t.action}</div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-white">{t.sym}</span>
+                    <button onClick={e => { e.stopPropagation(); openChart(t.sym); }} className="font-bold text-genius-green hover:underline font-mono">{t.sym}</button>
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-1">
                         <div className="w-16 h-1.5 bg-genius-border rounded-full overflow-hidden">
