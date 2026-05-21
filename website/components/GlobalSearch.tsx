@@ -146,7 +146,7 @@ export default function GlobalSearch() {
   return (
     <>
       {/* ── Persistent pill ───────────────────────────────────────────────── */}
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[150] w-full max-w-xs px-4" style={{ pointerEvents: "auto" }}>
+      <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[150] w-full max-w-xs px-4" style={{ pointerEvents: "auto" }}>
         <button
           onClick={() => setOpen(true)}
           className="w-full flex items-center gap-2.5 px-4 py-2.5 rounded-2xl text-sm font-mono transition-all group"
