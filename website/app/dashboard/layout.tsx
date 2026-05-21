@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   Brain, Bell, Settings, LogOut, BarChart3, Activity,
   Shield, PieChart, Zap, ToggleLeft, ToggleRight, CreditCard,
-  Star, Newspaper,
+  Star, Newspaper, Bot, FlameKindling, Infinity, Rocket,
 } from "lucide-react";
 import { getUser, clearUser } from "@/lib/auth";
 import { getBotConfig } from "@/lib/bot-config";
@@ -19,8 +19,12 @@ const NAV = [
   { icon: Shield,      label: "Risk Settings", href: "/dashboard/risk" },
   { icon: Bell,        label: "Alerts",        href: "/dashboard/alerts" },
   { icon: Star,        label: "Watchlist",     href: "/dashboard/watchlist" },
-  { icon: Newspaper,   label: "News Scanner",  href: "/dashboard/news" },
-  { icon: CreditCard,  label: "Billing",       href: "/dashboard/billing" },
+  { icon: Newspaper,       label: "News Scanner",  href: "/dashboard/news" },
+  { icon: Bot,             label: "AI Bots",       href: "/dashboard/bots" },
+  { icon: FlameKindling,   label: "Derivatives",   href: "/dashboard/derivatives" },
+  { icon: Infinity,        label: "Perpetuals",    href: "/dashboard/perpetuals" },
+  { icon: Rocket,          label: "IPOs",          href: "/dashboard/ipos" },
+  { icon: CreditCard,      label: "Billing",       href: "/dashboard/billing" },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
