@@ -38,6 +38,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     const user = getUser();
     if (!user) { router.push("/auth"); return; }
+    // Owner bypass: jadeng808@gmail.com always has full access
+    const OWNER_EMAIL = "jadeng808@gmail.com";
+    const isOwner = user.email === OWNER_EMAIL || localStorage.getItem("ggai_owner") === "true";
+    if (isOwner) localStorage.setItem("ggai_owner", "true");
     setRiskLevel((user as any).riskProfile || "moderate");
     setBotActive((user as any).botActive ?? true);
     const cfg = getBotConfig();

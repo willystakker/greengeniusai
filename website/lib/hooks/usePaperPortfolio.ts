@@ -37,6 +37,59 @@ export function usePaperPortfolio(refreshMs = 30000) {
   });
 
   const refresh = useCallback(async () => {
+    // Check for Alpaca keys — if present, fetch real portfolio data
+    const alpacaKey    = typeof window !== "undefined" ? (localStorage.getItem("ggai_alpaca_key")    ?? "") : "";
+    const alpacaSecret = typeof window !== "undefined" ? (localStorage.getItem("ggai_alpaca_secret") ?? "") : "";
+    const alpacaPaper  = typeof window !== "undefined" ? (localStorage.getItem("ggai_alpaca_paper")  !== "false") : true;
+    const hasAlpaca    = alpacaKey.length > 4 && alpacaSecret.length > 4;
+
+    if (hasAlpaca) {
+      try {
+        const res  = await fetch("/api/bot/status", {
+          headers: {
+            "x-alpaca-key":    alpacaKey,
+            "x-alpaca-secret": alpacaSecret,
+            "x-alpaca-paper":  String(alpacaPaper),
+          },
+        });
+        const data = await res.json();
+        if (data.connected) {
+          const alpacaPositions: LivePaperPosition[] = (data.positions ?? []).map((p: any) => {
+            const value = p.market_value;
+            const pl    = p.unrealized_pl;
+            const plPct = +(p.unrealized_plpc * 100).toFixed(2);
+            return {
+              sym:          p.symbol,
+              shares:       p.qty,
+              avgEntry:     p.avg_entry_price,
+              totalCost:    +(p.qty * p.avg_entry_price).toFixed(2),
+              currentPrice: p.current_price,
+              value,
+              pl,
+              plPct,
+            };
+          });
+          const posValue   = alpacaPositions.reduce((s, p) => s + p.value, 0);
+          const totalValue = +(data.cash + posValue).toFixed(2);
+          const deposited  = totalValue; // Alpaca doesn't track deposits — use current value as baseline
+          setState({
+            cash:       data.cash,
+            deposited,
+            positions:  alpacaPositions,
+            trades:     [],
+            totalValue,
+            totalPl:    data.equity - data.portfolio_value, // unrealized total
+            totalPlPct: 0,
+            loading:    false,
+          });
+          return;
+        }
+      } catch {
+        // fall through to paper portfolio
+      }
+    }
+
+    // Paper portfolio fallback
     const portfolio = loadPaperPortfolio();
     const syms = Object.keys(portfolio.positions);
     let prices: Record<string, { price: number }> = {};

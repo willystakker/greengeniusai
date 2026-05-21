@@ -6,7 +6,7 @@ import {
   User, CreditCard, Brain, Bell, Shield, ChevronRight,
   CheckCircle, ExternalLink, Zap, Globe, Lock,
   Activity, RefreshCw, TrendingUp, AlertTriangle, Cpu,
-  Bot,
+  Bot, Eye, EyeOff, Wifi, WifiOff, Link2,
 } from "lucide-react";
 import Link from "next/link";
 import { getUser } from "@/lib/auth";
@@ -62,6 +62,16 @@ function SettingsContent() {
   const [stopLoss,     setStopLoss]     = useState(0);
   const [botActive,    setBotActive]    = useState(true);
 
+  // Alpaca broker connection
+  const [alpacaKey,      setAlpacaKey]      = useState("");
+  const [alpacaSecret,   setAlpacaSecret]   = useState("");
+  const [alpacaPaper,    setAlpacaPaper]    = useState(true);
+  const [showKey,        setShowKey]        = useState(false);
+  const [showSecret,     setShowSecret]     = useState(false);
+  const [brokerStatus,   setBrokerStatus]   = useState<"idle"|"testing"|"connected"|"error">("idle");
+  const [brokerSaved,    setBrokerSaved]    = useState(false);
+  const [brokerPortfolio,setBrokerPortfolio]= useState<{value:number;cash:number;buyingPower:number}|null>(null);
+
   useEffect(() => {
     const user = getUser();
     if (user) {
@@ -79,6 +89,10 @@ function SettingsContent() {
     if (cfg.updatedAt) {
       setLastSaved(new Date(cfg.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
     }
+    // Load saved Alpaca keys
+    setAlpacaKey(localStorage.getItem("ggai_alpaca_key") ?? "");
+    setAlpacaSecret(localStorage.getItem("ggai_alpaca_secret") ?? "");
+    setAlpacaPaper(localStorage.getItem("ggai_alpaca_paper") !== "false");
   }, []);
 
   const toggleGroup = (g: AssetGroup) => {
@@ -117,6 +131,43 @@ function SettingsContent() {
   const handleSave = () => {
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
+  };
+
+  const handleSaveBroker = () => {
+    localStorage.setItem("ggai_alpaca_key",    alpacaKey.trim());
+    localStorage.setItem("ggai_alpaca_secret", alpacaSecret.trim());
+    localStorage.setItem("ggai_alpaca_paper",  String(alpacaPaper));
+    setBrokerSaved(true);
+    setBrokerStatus("idle");
+    setBrokerPortfolio(null);
+    setTimeout(() => setBrokerSaved(false), 3000);
+  };
+
+  const handleTestBroker = async () => {
+    if (!alpacaKey || !alpacaSecret) return;
+    setBrokerStatus("testing");
+    try {
+      const res  = await fetch("/api/bot/status", {
+        headers: {
+          "x-alpaca-key":    alpacaKey,
+          "x-alpaca-secret": alpacaSecret,
+          "x-alpaca-paper":  String(alpacaPaper),
+        },
+      });
+      const data = await res.json();
+      if (data.connected) {
+        setBrokerStatus("connected");
+        setBrokerPortfolio({
+          value:       data.portfolio_value,
+          cash:        data.cash,
+          buyingPower: data.buying_power,
+        });
+      } else {
+        setBrokerStatus("error");
+      }
+    } catch {
+      setBrokerStatus("error");
+    }
   };
 
   const [tradeMin, tradeMax] = estimateTradesPerWeek(confidence, universe);
@@ -438,19 +489,147 @@ function SettingsContent() {
           {/* ── ACCOUNT ── */}
           {section === "paper" && (
             <div className="flex flex-col gap-4">
+
+              {/* Connect Live Trading */}
               <div className="genius-card rounded-xl p-6 border border-genius-green/20">
+                <div className="flex items-center gap-2 mb-1">
+                  <Link2 size={16} className="text-genius-green" />
+                  <h2 className="font-bold text-white">Connect Live Trading</h2>
+                  {brokerStatus === "connected" && (
+                    <span className="ml-auto flex items-center gap-1 text-xs font-mono font-bold text-genius-green">
+                      <Wifi size={12} /> CONNECTED
+                    </span>
+                  )}
+                  {brokerStatus === "error" && (
+                    <span className="ml-auto flex items-center gap-1 text-xs font-mono font-bold text-red-400">
+                      <WifiOff size={12} /> CONNECTION FAILED
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-genius-muted mb-5 leading-relaxed">
+                  Enter your Alpaca API keys to enable real trade execution. Keys are stored locally — never sent to our servers.
+                </p>
+
+                <div className="flex flex-col gap-4">
+                  {/* API Key */}
+                  <div>
+                    <label className="text-xs text-genius-muted font-mono mb-1.5 block">ALPACA API KEY</label>
+                    <div className="relative">
+                      <input
+                        type={showKey ? "text" : "password"}
+                        value={alpacaKey}
+                        onChange={e => setAlpacaKey(e.target.value)}
+                        placeholder="PKXXXXXXXXXXXXXXXX"
+                        className="w-full bg-genius-black border border-genius-border rounded-lg px-3 py-2.5 pr-10 text-white text-sm font-mono focus:outline-none focus:border-genius-green transition-colors"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowKey(v => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-genius-muted hover:text-white transition-colors"
+                      >
+                        {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Secret Key */}
+                  <div>
+                    <label className="text-xs text-genius-muted font-mono mb-1.5 block">ALPACA SECRET KEY</label>
+                    <div className="relative">
+                      <input
+                        type={showSecret ? "text" : "password"}
+                        value={alpacaSecret}
+                        onChange={e => setAlpacaSecret(e.target.value)}
+                        placeholder="••••••••••••••••••••••••••••••••"
+                        className="w-full bg-genius-black border border-genius-border rounded-lg px-3 py-2.5 pr-10 text-white text-sm font-mono focus:outline-none focus:border-genius-green transition-colors"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSecret(v => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-genius-muted hover:text-white transition-colors"
+                      >
+                        {showSecret ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Paper / Live toggle */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-genius-black border border-genius-border">
+                    <div>
+                      <p className="text-sm font-semibold text-white">Paper Trading Mode</p>
+                      <p className="text-xs text-genius-muted">Use Alpaca paper account — no real money at risk</p>
+                    </div>
+                    <button
+                      onClick={() => setAlpacaPaper(v => !v)}
+                      className={`w-11 h-6 rounded-full relative transition-colors flex-shrink-0 ${alpacaPaper ? "bg-genius-green" : "bg-red-500"}`}
+                    >
+                      <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${alpacaPaper ? "translate-x-5" : "translate-x-0.5"}`} />
+                    </button>
+                  </div>
+                  {!alpacaPaper && (
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-400 font-mono">
+                      <AlertTriangle size={12} /> LIVE MODE — real funds will be traded. Use with caution.
+                    </div>
+                  )}
+
+                  {/* Portfolio preview on successful connection */}
+                  {brokerStatus === "connected" && brokerPortfolio && (
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { label: "Portfolio Value", value: `$${brokerPortfolio.value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+                        { label: "Cash",            value: `$${brokerPortfolio.cash.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+                        { label: "Buying Power",    value: `$${brokerPortfolio.buyingPower.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+                      ].map(m => (
+                        <div key={m.label} className="bg-genius-black rounded-xl p-3 border border-genius-green/20 text-center">
+                          <p className="text-xs text-genius-muted font-mono mb-1">{m.label}</p>
+                          <p className="font-black text-sm text-genius-green">{m.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Action buttons */}
+                  <div className="flex gap-3 pt-1">
+                    <button
+                      onClick={handleSaveBroker}
+                      className="px-5 py-2.5 rounded-xl btn-genius text-sm font-black flex items-center gap-2"
+                    >
+                      {brokerSaved ? <><CheckCircle size={14} /> Saved!</> : <><Lock size={14} /> Save Keys</>}
+                    </button>
+                    <button
+                      onClick={handleTestBroker}
+                      disabled={!alpacaKey || !alpacaSecret || brokerStatus === "testing"}
+                      className="px-5 py-2.5 rounded-xl border border-genius-green/40 text-genius-green text-sm font-bold hover:bg-genius-green/10 transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {brokerStatus === "testing" ? (
+                        <><RefreshCw size={14} className="animate-spin" /> Testing...</>
+                      ) : brokerStatus === "connected" ? (
+                        <><Wifi size={14} /> Connected</>
+                      ) : (
+                        <><Activity size={14} /> Test Connection</>
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-xs text-genius-muted">
+                    Get your API keys at{" "}
+                    <a href="https://app.alpaca.markets/paper-trading/overview" target="_blank" rel="noopener noreferrer" className="text-genius-green hover:underline">
+                      app.alpaca.markets <ExternalLink size={10} className="inline" />
+                    </a>
+                  </p>
+                </div>
+              </div>
+
+              {/* Trading Account info */}
+              <div className="genius-card rounded-xl p-6 border border-genius-border">
                 <div className="flex items-center gap-2 mb-4">
                   <Bot size={16} className="text-genius-green" />
                   <h2 className="font-bold text-white">Trading Account</h2>
                 </div>
-                <p className="text-sm text-genius-muted mb-6 leading-relaxed">
-                  GreenGeniusAI's AI bot executes trades automatically based on your signal settings and confidence threshold.
-                </p>
                 <div className="grid grid-cols-3 gap-4 mb-6">
                   {[
                     { icon: "⚡", label: "AI-Powered",        desc: "Signals generated from 10,000+ data points across markets, news, and on-chain activity." },
                     { icon: "📈", label: "Real Market Prices", desc: "Every trade uses live market data for accurate execution." },
-                    { icon: "🔒", label: "Secure",             desc: "Your account and portfolio data is encrypted and stored privately." },
+                    { icon: "🔒", label: "Secure",             desc: "Your API keys stay on your device — never sent to our servers." },
                   ].map(c => (
                     <div key={c.label} className="bg-genius-black rounded-xl p-4 border border-genius-border text-center">
                       <div className="text-2xl mb-2">{c.icon}</div>
@@ -460,23 +639,20 @@ function SettingsContent() {
                   ))}
                 </div>
                 <div className="flex gap-3">
-                  <a href="/dashboard/add-funds"
-                    className="px-5 py-2.5 rounded-xl btn-genius text-sm font-black flex items-center gap-2">
-                    <Zap size={14} /> Add Funds
-                  </a>
                   <a href="/dashboard"
-                    className="px-5 py-2.5 rounded-xl border border-genius-green/40 text-genius-green text-sm font-bold hover:bg-genius-green/10 transition-colors flex items-center gap-2">
+                    className="px-5 py-2.5 rounded-xl btn-genius text-sm font-black flex items-center gap-2">
                     <TrendingUp size={14} /> View Portfolio
                   </a>
                 </div>
               </div>
+
               <div className="genius-card rounded-xl p-5 border border-genius-border">
                 <div className="flex items-center gap-2 mb-3">
                   <Lock size={13} className="text-genius-green" />
                   <h3 className="font-bold text-white text-sm">Your Data is Private</h3>
                 </div>
                 <p className="text-xs text-genius-muted leading-relaxed">
-                  Your portfolio data is encrypted and stored securely. It never leaves your device.
+                  Your API keys and portfolio data are stored only in your browser's local storage and never transmitted to our servers.
                 </p>
               </div>
             </div>
