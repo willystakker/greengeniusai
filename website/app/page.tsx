@@ -7,8 +7,9 @@ import {
   TrendingUp, TrendingDown, Brain, Shield, Zap, Bell,
   ChevronRight, Star, Lock, Globe, ArrowUpRight, BarChart3,
   DollarSign, RefreshCw, CheckCircle, Menu, X, Play, Pause,
-  Activity, AlertTriangle, Eye, Settings
+  Activity, AlertTriangle, Eye, Settings, LayoutDashboard,
 } from "lucide-react";
+import { getUser } from "@/lib/auth";
 
 // ─── Ticker type ─────────────────────────────────────────────────────────────
 type Ticker = { sym: string; price: string; change: string; up: boolean };
@@ -197,9 +198,12 @@ const TESTIMONIALS = [
 export default function HomePage() {
   const { open: openChart } = useTickerChart();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [activeTradeIdx, setActiveTradeIdx] = useState(0);
   const [botActive, setBotActive] = useState(true);
   const [portfolioValue, setPortfolioValue] = useState(12847.33);
+
+  useEffect(() => { setIsLoggedIn(!!getUser()); }, []);
   const [tickerData, setTickerData] = useState<Ticker[]>(FALLBACK_TICKERS);
 
   // Fetch live prices on mount and every 30 seconds
@@ -271,19 +275,30 @@ export default function HomePage() {
               <Link href="/about" className="text-sm text-genius-muted hover:text-genius-green transition-colors">
                 About Us
               </Link>
+              {isLoggedIn && (
+                <Link href="/dashboard" className="text-sm text-genius-green font-bold hover:text-white transition-colors flex items-center gap-1.5">
+                  <LayoutDashboard size={14} />
+                  Dashboard
+                </Link>
+              )}
             </div>
 
             {/* CTA */}
             <div className="hidden md:flex items-center gap-3">
-              <Link href="/auth" className="text-sm text-genius-muted hover:text-white transition-colors">
-                Sign In
-              </Link>
-              <Link
-                href="/auth?mode=signup"
-                className="btn-genius px-5 py-2 rounded-lg text-sm font-bold"
-              >
-                Get Started Free
-              </Link>
+              {isLoggedIn ? (
+                <Link href="/dashboard" className="btn-genius px-5 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
+                  <LayoutDashboard size={14} /> Go to Dashboard
+                </Link>
+              ) : (
+                <>
+                  <Link href="/auth" className="text-sm text-genius-muted hover:text-white transition-colors">
+                    Sign In
+                  </Link>
+                  <Link href="/auth?mode=signup" className="btn-genius px-5 py-2 rounded-lg text-sm font-bold">
+                    Get Started Free
+                  </Link>
+                </>
+              )}
             </div>
 
             {/* Mobile menu */}
@@ -312,9 +327,15 @@ export default function HomePage() {
             <Link href="/about" className="text-genius-muted hover:text-genius-green" onClick={() => setMenuOpen(false)}>
               About Us
             </Link>
-            <Link href="/auth?mode=signup" className="btn-genius px-5 py-3 rounded-lg text-center font-bold">
-              Get Started Free
-            </Link>
+            {isLoggedIn ? (
+              <Link href="/dashboard" className="btn-genius px-5 py-3 rounded-lg text-center font-bold flex items-center justify-center gap-2" onClick={() => setMenuOpen(false)}>
+                <LayoutDashboard size={15} /> Go to Dashboard
+              </Link>
+            ) : (
+              <Link href="/auth?mode=signup" className="btn-genius px-5 py-3 rounded-lg text-center font-bold" onClick={() => setMenuOpen(false)}>
+                Get Started Free
+              </Link>
+            )}
           </div>
         )}
       </nav>
