@@ -49,9 +49,15 @@ export default function PortfolioPage() {
   } | null>(null);
   const [newsItems, setNewsItems] = useState<any[]>([]);
 
+  const [hasKeys, setHasKeys] = useState(false);
+
   const { prices, loading: pricesLoading, lastUpdated, pulse } = useLivePrices(20000);
   const { portfolio, loading: portfolioLoading } = useLivePortfolio(15000);
   const { open: openChart } = useTickerChart();
+
+  useEffect(() => {
+    setHasKeys(!!localStorage.getItem("ggai_alpaca_key"));
+  }, []);
 
   useEffect(() => {
     const user = getUser();
@@ -107,7 +113,6 @@ export default function PortfolioPage() {
     return () => clearInterval(iv);
   }, [fetchNews]);
 
-  const hasKeys    = typeof window !== "undefined" && !!localStorage.getItem("ggai_alpaca_key");
   const connected  = portfolio?.connected ?? false;
   const equity     = portfolio?.portfolio_value ?? 100;
   const cash       = portfolio?.cash ?? 100;
