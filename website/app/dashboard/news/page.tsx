@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Newspaper, RefreshCw, TrendingUp, TrendingDown, Brain,
-  ExternalLink, Search, Filter, Zap, Bell, Clock,
+  ExternalLink, Search, Clock, Wifi,
 } from "lucide-react";
 import { useTickerChart } from "@/components/TickerChartProvider";
+import { useRealPortfolio } from "@/lib/hooks/useRealPortfolio";
 
 type NewsItem = {
   title: string; publisher: string; link: string;
@@ -14,8 +15,8 @@ type NewsItem = {
   sym: string;
 };
 
-const PORTFOLIO_SYMS = ["NVDA","BTC","MSFT","SOL","AAPL","META","AMD","ETH"];
-const ALL_SYMS = ["NVDA","BTC","MSFT","SOL","AAPL","META","AMD","ETH","TSLA","AMZN","GOOGL","SPX","QQQ"];
+// Broad market symbols always scanned
+const MARKET_SYMS = ["NVDA","TSLA","AMZN","GOOGL","MSFT","AAPL","META","AMD","SPY","QQQ"];
 
 function timeAgo(ts: number) {
   const s = Math.floor(Date.now() / 1000) - ts;
@@ -26,19 +27,26 @@ function timeAgo(ts: number) {
 }
 
 export default function NewsPage() {
-  const [allNews,    setAllNews]    = useState<NewsItem[]>([]);
-  const [loading,    setLoading]    = useState(true);
-  const [lastScan,   setLastScan]   = useState<Date | null>(null);
-  const [filter,     setFilter]     = useState<"all"|"bullish"|"bearish"|"portfolio">("all");
-  const [search,     setSearch]     = useState("");
-  const [scanning,   setScanning]   = useState(false);
+  const [allNews,  setAllNews]  = useState<NewsItem[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [lastScan, setLastScan] = useState<Date | null>(null);
+  const [filter,   setFilter]   = useState<"all"|"bullish"|"bearish"|"portfolio">("all");
+  const [search,   setSearch]   = useState("");
+  const [scanning, setScanning] = useState(false);
   const { open: openChart } = useTickerChart();
 
+  const portfolio = useRealPortfolio(30000);
+  const portfolioSyms = portfolio.positions.map(p => p.sym);
+
+  // Combine portfolio symbols with market standards, dedupe
+  const allSyms = [...new Set([...portfolioSyms, ...MARKET_SYMS])];
+
   const scanNews = useCallback(async () => {
+    if (allSyms.length === 0) return;
     setScanning(true);
     try {
       const results = await Promise.all(
-        ALL_SYMS.map(async sym => {
+        allSyms.map(async sym => {
           try {
             const r = await fetch(`/api/news?sym=${sym}`);
             if (!r.ok) return [];
@@ -47,11 +55,9 @@ export default function NewsPage() {
           } catch { return []; }
         })
       );
-      const flat = results.flat() as NewsItem[];
-      // Deduplicate by title
-      const seen = new Set<string>();
+      const flat   = results.flat() as NewsItem[];
+      const seen   = new Set<string>();
       const unique = flat.filter(n => { if (seen.has(n.title)) return false; seen.add(n.title); return true; });
-      // Sort by time
       unique.sort((a, b) => b.publishedAt - a.publishedAt);
       setAllNews(unique);
       setLastScan(new Date());
@@ -59,28 +65,28 @@ export default function NewsPage() {
       setScanning(false);
       setLoading(false);
     }
-  }, []);
+  }, [allSyms.join(",")]);
 
-  // Initial scan + 60s polling
   useEffect(() => {
-    scanNews();
-    const iv = setInterval(scanNews, 60000);
-    return () => clearInterval(iv);
+    if (allSyms.length > 0) {
+      scanNews();
+      const iv = setInterval(scanNews, 60000);
+      return () => clearInterval(iv);
+    }
   }, [scanNews]);
 
   const filtered = allNews.filter(n => {
     if (filter === "bullish"   && n.sentiment !== "bullish")  return false;
     if (filter === "bearish"   && n.sentiment !== "bearish")  return false;
-    if (filter === "portfolio" && !PORTFOLIO_SYMS.includes(n.sym)) return false;
+    if (filter === "portfolio" && !portfolioSyms.includes(n.sym)) return false;
     if (search && !n.title.toLowerCase().includes(search.toLowerCase()) && !n.sym.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
   const bullishCount  = allNews.filter(n => n.sentiment === "bullish").length;
   const bearishCount  = allNews.filter(n => n.sentiment === "bearish").length;
-  const portfolioHits = allNews.filter(n => PORTFOLIO_SYMS.includes(n.sym)).length;
-
-  const topMover = allNews.reduce<{ sym: string; count: number } | null>((best, n) => {
+  const portfolioHits = allNews.filter(n => portfolioSyms.includes(n.sym)).length;
+  const topMover      = allNews.reduce<{ sym: string; count: number } | null>((best, n) => {
     if (!best) return { sym: n.sym, count: 1 };
     const c = allNews.filter(x => x.sym === n.sym).length;
     return c > best.count ? { sym: n.sym, count: c } : best;
@@ -99,18 +105,16 @@ export default function NewsPage() {
           </h1>
           <p className="text-xs text-genius-muted font-mono mt-1 flex items-center gap-2">
             {scanning ? (
-              <><RefreshCw size={11} className="animate-spin text-genius-green" /><span className="text-genius-green">Scanning {ALL_SYMS.length} symbols…</span></>
+              <><RefreshCw size={11} className="animate-spin text-genius-green" /><span className="text-genius-green">Scanning {allSyms.length} symbols…</span></>
             ) : (
-              <><div className="live-dot" /><span>Live scan · every 60 seconds</span></>
+              <><div className="live-dot" /><span>Live scan · {allSyms.length} symbols · every 60s</span></>
             )}
+            {portfolioSyms.length > 0 && <span className="text-genius-green">· {portfolioSyms.length} portfolio positions</span>}
             {lastScan && <span>· Last: {lastScan.toLocaleTimeString()}</span>}
           </p>
         </div>
-        <button
-          onClick={scanNews}
-          disabled={scanning}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg btn-genius text-sm font-bold disabled:opacity-60"
-        >
+        <button onClick={scanNews} disabled={scanning}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg btn-genius text-sm font-bold disabled:opacity-60">
           <RefreshCw size={14} className={scanning ? "animate-spin" : ""} />
           {scanning ? "Scanning…" : "Scan Now"}
         </button>
@@ -119,11 +123,11 @@ export default function NewsPage() {
       {/* KPI strip */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: "Articles Found",   value: allNews.length,   color: "text-white",          icon: Newspaper,  bg: "bg-genius-card" },
-          { label: "Bullish Signals",  value: bullishCount,     color: "text-genius-green",   icon: TrendingUp, bg: "bg-genius-green/5" },
-          { label: "Bearish Signals",  value: bearishCount,     color: "text-red-400",        icon: TrendingDown, bg: "bg-red-500/5" },
-          { label: "Portfolio News",   value: portfolioHits,    color: "text-genius-emerald", icon: Brain,      bg: "bg-genius-emerald/5" },
-        ].map((k,i) => (
+          { label: "Articles Found",   value: allNews.length,   color: "text-white",          icon: Newspaper,    bg: "bg-genius-card"      },
+          { label: "Bullish Signals",  value: bullishCount,     color: "text-genius-green",   icon: TrendingUp,   bg: "bg-genius-green/5"   },
+          { label: "Bearish Signals",  value: bearishCount,     color: "text-red-400",        icon: TrendingDown, bg: "bg-red-500/5"        },
+          { label: "Portfolio News",   value: portfolioHits,    color: "text-genius-emerald", icon: Brain,        bg: "bg-genius-emerald/5" },
+        ].map((k, i) => (
           <div key={i} className={`genius-card rounded-xl p-4 ${k.bg} border border-genius-border`}>
             <div className="flex items-center justify-between mb-2">
               <p className="text-[10px] text-genius-muted font-mono">{k.label.toUpperCase()}</p>
@@ -134,7 +138,7 @@ export default function NewsPage() {
         ))}
       </div>
 
-      {/* AI analysis banner */}
+      {/* AI sentiment banner */}
       {!loading && allNews.length > 0 && (
         <div className="genius-card rounded-xl p-4 border border-genius-green/20 bg-genius-green/3">
           <div className="flex items-start gap-3">
@@ -143,12 +147,13 @@ export default function NewsPage() {
               <p className="text-xs font-bold text-genius-green font-mono mb-1">AI MARKET SENTIMENT ANALYSIS</p>
               <p className="text-sm text-white leading-relaxed">
                 {bullishCount > bearishCount
-                  ? `Market sentiment is <strong>bullish</strong> (${Math.round(bullishCount / (bullishCount + bearishCount) * 100)}% of signals). `
+                  ? `Market sentiment is bullish (${Math.round(bullishCount / (bullishCount + bearishCount) * 100)}% of signals). `
                   : bearishCount > bullishCount
-                  ? `Market sentiment is <strong>bearish</strong> (${Math.round(bearishCount / (bullishCount + bearishCount) * 100)}% of signals). `
+                  ? `Market sentiment is bearish (${Math.round(bearishCount / (bullishCount + bearishCount) * 100)}% of signals). `
                   : "Market sentiment is neutral. "}
                 {topMover && `Most coverage: ${topMover.sym} (${topMover.count} articles). `}
-                {portfolioHits > 0 && `${portfolioHits} news items directly affect your portfolio positions.`}
+                {portfolioHits > 0 && `${portfolioHits} news items directly affect your ${portfolioSyms.length} portfolio positions.`}
+                {portfolioSyms.length === 0 && "No open positions yet — bot will open positions Tuesday when market opens."}
               </p>
             </div>
             <div className="flex items-center gap-1.5 text-[10px] font-mono text-genius-muted flex-shrink-0">
@@ -159,15 +164,13 @@ export default function NewsPage() {
         </div>
       )}
 
-      {/* Filter + search bar */}
+      {/* Filter + search */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-48">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-genius-muted" />
-          <input
-            type="text" value={search} onChange={e => setSearch(e.target.value)}
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search headlines, symbols…"
-            className="w-full pl-9 pr-4 py-2.5 bg-genius-card border border-genius-border rounded-xl text-sm text-white placeholder-genius-muted/50 focus:outline-none focus:border-genius-green font-mono"
-          />
+            className="w-full pl-9 pr-4 py-2.5 bg-genius-card border border-genius-border rounded-xl text-sm text-white placeholder-genius-muted/50 focus:outline-none focus:border-genius-green font-mono" />
         </div>
         <div className="flex gap-1 p-1 bg-genius-card rounded-xl border border-genius-border">
           {(["all","bullish","bearish","portfolio"] as const).map(f => (
@@ -179,30 +182,24 @@ export default function NewsPage() {
                     : f === "portfolio" ? "bg-genius-emerald/15 text-genius-emerald"
                     : "bg-genius-green/15 text-genius-green"
                   : "text-genius-muted hover:text-white"
-              }`}
-            >
-              {f === "portfolio" ? "My Portfolio" : f}
-            </button>
+              }`}>{f === "portfolio" ? "My Portfolio" : f}</button>
           ))}
         </div>
         <span className="text-xs text-genius-muted font-mono">{filtered.length} articles</span>
       </div>
 
-      {/* Sym filter chips */}
+      {/* Symbol chips */}
       <div className="flex flex-wrap gap-2">
-        {ALL_SYMS.map(sym => {
-          const count = allNews.filter(n => n.sym === sym).length;
-          const hasBullish = allNews.some(n => n.sym === sym && n.sentiment === "bullish");
-          const hasBearish = allNews.some(n => n.sym === sym && n.sentiment === "bearish");
+        {allSyms.map(sym => {
+          const count      = allNews.filter(n => n.sym === sym).length;
+          const inPortfolio = portfolioSyms.includes(sym);
           return (
             <button key={sym} onClick={() => openChart(sym)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-genius-border hover:border-genius-green/40 hover:bg-genius-card transition-all text-xs font-mono">
-              <span className={`font-bold ${PORTFOLIO_SYMS.includes(sym) ? "text-genius-green" : "text-white"}`}>{sym}</span>
-              {count > 0 && (
-                <span className={`text-[10px] font-bold ${hasBearish && !hasBullish ? "text-red-400" : "text-genius-green"}`}>
-                  {count}
-                </span>
-              )}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border hover:border-genius-green/40 hover:bg-genius-card transition-all text-xs font-mono"
+              style={{ borderColor: inPortfolio ? "rgba(0,255,65,0.3)" : "rgba(255,255,255,0.1)" }}>
+              <span className={`font-bold ${inPortfolio ? "text-genius-green" : "text-white"}`}>{sym}</span>
+              {inPortfolio && <span className="text-[9px] text-genius-green/60">●</span>}
+              {count > 0 && <span className="text-[10px] font-bold text-genius-green">{count}</span>}
             </button>
           );
         })}
@@ -212,11 +209,9 @@ export default function NewsPage() {
       {loading ? (
         <div className="genius-card rounded-xl p-8 flex flex-col items-center justify-center gap-4 border border-genius-border">
           <RefreshCw size={28} className="animate-spin text-genius-green" />
-          <p className="text-sm text-genius-muted font-mono">Scanning {ALL_SYMS.length} symbols for news…</p>
+          <p className="text-sm text-genius-muted font-mono">Scanning {allSyms.length} symbols for news…</p>
           <div className="flex gap-2 flex-wrap justify-center">
-            {ALL_SYMS.map(s => (
-              <span key={s} className="text-xs font-mono text-genius-green animate-pulse">{s}</span>
-            ))}
+            {allSyms.map(s => <span key={s} className="text-xs font-mono text-genius-green animate-pulse">{s}</span>)}
           </div>
         </div>
       ) : filtered.length === 0 ? (
@@ -238,10 +233,8 @@ export default function NewsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <button
-                        onClick={() => openChart(item.sym)}
-                        className="text-xs font-black font-mono text-genius-green hover:underline px-1.5 py-0.5 rounded border border-genius-green/30 bg-genius-green/10"
-                      >
+                      <button onClick={() => openChart(item.sym)}
+                        className="text-xs font-black font-mono text-genius-green hover:underline px-1.5 py-0.5 rounded border border-genius-green/30 bg-genius-green/10">
                         {item.sym}
                       </button>
                       <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded border ${
@@ -251,7 +244,7 @@ export default function NewsPage() {
                       }`}>
                         {item.sentiment === "bullish" ? "▲ BULLISH" : item.sentiment === "bearish" ? "▼ BEARISH" : "NEUTRAL"}
                       </span>
-                      {PORTFOLIO_SYMS.includes(item.sym) && (
+                      {portfolioSyms.includes(item.sym) && (
                         <span className="text-[10px] font-mono text-genius-emerald border border-genius-emerald/20 rounded px-1 py-0.5">IN PORTFOLIO</span>
                       )}
                     </div>

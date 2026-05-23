@@ -27,7 +27,7 @@ export type PaperPortfolio = {
 };
 
 const KEY = "ggai_portfolio";
-const DEFAULT_BALANCE = 10000;
+const DEFAULT_BALANCE = 0;
 
 export function loadPaperPortfolio(): PaperPortfolio {
   if (typeof window === "undefined") {
@@ -35,7 +35,16 @@ export function loadPaperPortfolio(): PaperPortfolio {
   }
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw) as PaperPortfolio;
+    if (raw) {
+      const p = JSON.parse(raw) as PaperPortfolio;
+      // Wipe stale demo data: exact $10,000 default with no real trades
+      if (p.deposited === 10000 && p.trades.length === 0 && Object.keys(p.positions).length === 0) {
+        const fresh = { cash: 0, deposited: 0, positions: {}, trades: [] };
+        localStorage.setItem(KEY, JSON.stringify(fresh));
+        return fresh;
+      }
+      return p;
+    }
   } catch {}
   return { cash: DEFAULT_BALANCE, deposited: DEFAULT_BALANCE, positions: {}, trades: [] };
 }

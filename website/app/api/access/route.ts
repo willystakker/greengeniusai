@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
       secure: true,
       sameSite: "strict",
       path: "/",
-      maxAge: 60 * 60 * 24 * 365, // 1 year
+      // No maxAge = session cookie — clears when browser closes
     });
     return res;
   } catch {

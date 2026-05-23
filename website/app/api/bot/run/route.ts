@@ -1,8 +1,7 @@
 /**
  * POST /api/bot/run
- * Runs the AI signal engine and optionally executes real trades via Alpaca.
- * When alpacaKey + alpacaSecret are present → live execution mode.
- * When absent → signals-only mode (simulation).
+ * Generates AI signals. When Alpaca keys are provided, executes real orders.
+ * Without keys, returns signals only for local paper execution.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -14,16 +13,16 @@ import {
 } from "@/lib/alpaca";
 
 interface RunResult {
-  phase:       string;
-  ts:          string;
-  signals:     AssetSignal[];
-  buy:         AssetSignal[];
-  sell:        AssetSignal[];
-  mode:        "live" | "signals-only";
-  executed?:   { symbol: string; side: "buy" | "sell"; notional: number; orderId: string }[];
-  closed?:     { symbol: string; reason: string }[];
-  portfolio?:  { value: number; cash: number; buyingPower: number };
-  error?:      string;
+  phase:      string;
+  ts:         string;
+  signals:    AssetSignal[];
+  buy:        AssetSignal[];
+  sell:       AssetSignal[];
+  mode:       "live" | "local";
+  executed?:  { symbol: string; side: "buy" | "sell"; notional: number; orderId: string }[];
+  closed?:    { symbol: string; reason: string }[];
+  portfolio?: { value: number; cash: number; buyingPower: number };
+  error?:     string;
 }
 
 function now() { return new Date().toISOString(); }
@@ -36,39 +35,32 @@ export async function POST(req: NextRequest) {
   const result: RunResult = {
     phase: "starting", ts: now(),
     signals: [], buy: [], sell: [],
-    mode: "signals-only",
+    mode: "local",
   };
 
   try {
-    let body: Partial<BotConfig> & {
-      alpacaKey?: string;
-      alpacaSecret?: string;
-      alpacaPaper?: boolean;
-    } = {};
+    let body: Partial<BotConfig> & { alpacaKey?: string; alpacaSecret?: string; alpacaPaper?: boolean } = {};
     try { body = await req.json(); } catch {}
 
-    // Validate + sanitize Alpaca keys (must be alphanumeric strings, reasonable length)
+    // Validate Alpaca keys if provided
     const rawKey    = typeof body.alpacaKey    === "string" ? body.alpacaKey.trim()    : "";
     const rawSecret = typeof body.alpacaSecret === "string" ? body.alpacaSecret.trim() : "";
     const alpacaKey    = /^[A-Z0-9_\-]{4,128}$/i.test(rawKey)    ? rawKey    : "";
     const alpacaSecret = /^[A-Z0-9_\-]{4,128}$/i.test(rawSecret) ? rawSecret : "";
-    const alpacaPaper  = body.alpacaPaper !== false; // default true (paper)
+    const alpacaPaper  = body.alpacaPaper !== false;
+    const hasAlpaca    = alpacaKey.length > 4 && alpacaSecret.length > 4;
 
-    const hasAlpaca = alpacaKey.length > 4 && alpacaSecret.length > 4;
-
-    // Validate numeric fields are actually numbers within sane ranges
-    const rawConfidence = Number(body.confidenceThreshold ?? getBotConfig().confidenceThreshold ?? 80);
-    const confidenceThreshold = Number.isFinite(rawConfidence) ? Math.max(0, Math.min(100, rawConfidence)) : 80;
+    const rawConf = Number(body.confidenceThreshold ?? getBotConfig().confidenceThreshold ?? 80);
+    const confidenceThreshold = Number.isFinite(rawConf) ? Math.max(0, Math.min(100, rawConf)) : 80;
 
     const rawRisk  = typeof body.riskProfile === "string" ? body.riskProfile : "";
-    const riskProfile = ["conservative", "moderate", "aggressive"].includes(rawRisk)
-      ? rawRisk
-      : (getBotConfig().riskProfile ?? "moderate");
+    const riskProfile = ["conservative","moderate","aggressive"].includes(rawRisk)
+      ? rawRisk : (getBotConfig().riskProfile ?? "moderate");
 
     const rawUniverse = body.assetUniverse;
     const assetUniverse = Array.isArray(rawUniverse)
       ? (rawUniverse as unknown[]).filter(u => typeof u === "string").slice(0, 10) as string[]
-      : (getBotConfig().assetUniverse ?? ["US Stocks"]);
+      : (getBotConfig().assetUniverse ?? ["US Tech Stocks"]);
 
     const rawActive = body.botActive;
     const botActive = typeof rawActive === "boolean" ? rawActive : (getBotConfig().botActive ?? true);
@@ -83,14 +75,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ...result, phase: "skipped", error: "Bot is paused" });
     }
 
-    // ── Phase 1: Ingest ───────────────────────────────────────────────────────
+    // Phase 1: Ingest symbols
     result.phase = "1-ingest";
     const symbols = getUniverseSymbols(assetUniverse);
     if (!symbols.length) {
       return NextResponse.json({ ...result, error: "No symbols in universe" }, { status: 400 });
     }
 
-    // ── Phase 2-3: Process & Detect signals ──────────────────────────────────
+    // Phase 2-3: Generate signals
     result.phase   = "2-process";
     const all      = await generateSignals(symbols, riskProfile as any, 50);
     result.phase   = "3-detect";
@@ -98,14 +90,14 @@ export async function POST(req: NextRequest) {
     result.buy     = all.filter(s => s.action === "BUY"  && s.confidence >= confidenceThreshold);
     result.sell    = all.filter(s => s.action === "SELL" && s.confidence >= confidenceThreshold);
 
-    // ── Signals-only mode (no Alpaca keys) ───────────────────────────────────
+    // No Alpaca keys — return signals for local execution
     if (!hasAlpaca) {
       result.phase = "complete";
-      result.mode  = "signals-only";
+      result.mode  = "local";
       return NextResponse.json(result);
     }
 
-    // ── Phase 4: Execute via Alpaca ───────────────────────────────────────────
+    // Phase 4: Execute via Alpaca
     result.phase = "4-execute";
     result.mode  = "live";
 
@@ -118,35 +110,30 @@ export async function POST(req: NextRequest) {
     const buyingPower    = parseFloat(account.buying_power);
     const cash           = parseFloat(account.cash);
 
-    result.portfolio = {
-      value:        portfolioValue,
-      cash,
-      buyingPower,
-    };
+    result.portfolio = { value: portfolioValue, cash, buyingPower };
 
-    // ── Phase 5a: Monitor — close stop-loss positions ─────────────────────────
+    // Phase 5a: Stop-loss monitor
     result.phase  = "5-monitor";
     result.closed = [];
-    const stopPct = stopLossOverride > 0 ? stopLossOverride : 5; // default 5% stop
+    const stopPct = stopLossOverride > 0 ? stopLossOverride : 5;
 
     for (const pos of positions) {
       if (isStopTriggered(pos, stopPct)) {
         try {
           await closePosition(alpacaKey, alpacaSecret, alpacaPaper, pos.symbol);
-          result.closed.push({ symbol: pos.symbol, reason: `Stop-loss triggered at ${stopPct}%` });
+          result.closed.push({ symbol: pos.symbol, reason: `Stop-loss at ${stopPct}%` });
         } catch (err: any) {
-          console.warn(`Failed to close ${pos.symbol}:`, err.message);
+          console.warn(`Stop-loss close failed for ${pos.symbol}:`, err.message);
         }
       }
     }
 
-    // ── Phase 5b: Execute buys ────────────────────────────────────────────────
+    // Phase 5b: Execute buys
     result.executed = [];
-    const openPositionCount = positions.length - result.closed.length;
-    const availableSlots    = Math.max(0, maxPositions - openPositionCount);
-    const holdingSymbols    = new Set(positions.map(p => p.symbol.replace("/USD", "-USD")));
+    const openCount      = positions.length - result.closed.length;
+    const availableSlots = Math.max(0, maxPositions - openCount);
+    const holdingSymbols = new Set(positions.map(p => p.symbol.replace("/USD", "-USD")));
 
-    // Size each trade as a fraction of buying power, capped at $1,000
     const tradeSizeUSD = Math.min(
       Math.max(buyingPower / Math.max(availableSlots, 1), 100),
       1000,
@@ -164,18 +151,16 @@ export async function POST(req: NextRequest) {
           signal.sym, "buy", tradeSizeUSD,
         );
         result.executed.push({
-          symbol:   signal.sym,
-          side:     "buy",
-          notional: tradeSizeUSD,
-          orderId:  order.id,
+          symbol: signal.sym, side: "buy",
+          notional: tradeSizeUSD, orderId: order.id,
         });
         executed++;
       } catch (err: any) {
-        console.warn(`Failed to buy ${signal.sym}:`, err.message);
+        console.warn(`Buy failed for ${signal.sym}:`, err.message);
       }
     }
 
-    // ── Execute sells for signals on current positions ────────────────────────
+    // Execute sells on held positions
     const positionMap = new Map(positions.map(p => [p.symbol.replace("/USD", "-USD"), p]));
     for (const signal of result.sell) {
       const pos = positionMap.get(signal.sym);
@@ -183,13 +168,11 @@ export async function POST(req: NextRequest) {
       try {
         const order = await closePosition(alpacaKey, alpacaSecret, alpacaPaper, pos.symbol);
         result.executed.push({
-          symbol:   signal.sym,
-          side:     "sell",
-          notional: parseFloat(pos.market_value),
-          orderId:  order.id,
+          symbol: signal.sym, side: "sell",
+          notional: parseFloat(pos.market_value), orderId: order.id,
         });
       } catch (err: any) {
-        console.warn(`Failed to sell ${signal.sym}:`, err.message);
+        console.warn(`Sell failed for ${signal.sym}:`, err.message);
       }
     }
 

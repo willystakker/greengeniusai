@@ -3,10 +3,10 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  User, CreditCard, Brain, Bell, Shield, ChevronRight,
-  CheckCircle, ExternalLink, Zap, Globe, Lock,
+  User, Brain, Bell, Shield, ChevronRight,
+  CheckCircle, Zap, Globe, Lock,
   Activity, RefreshCw, TrendingUp, AlertTriangle, Cpu,
-  Bot, Eye, EyeOff, Wifi, WifiOff, Link2,
+  Bot, DollarSign, RotateCcw, Eye, EyeOff, Wifi, WifiOff,
 } from "lucide-react";
 import Link from "next/link";
 import { getUser } from "@/lib/auth";
@@ -16,16 +16,11 @@ import {
   estimateTradesPerWeek, nextRebalanceDate,
   type AssetGroup, type RebalanceFrequency, type BotConfig,
 } from "@/lib/bot-config";
+import { loadPaperPortfolio, resetPaperPortfolio } from "@/lib/paper-trading";
 
 const ALL_GROUPS: AssetGroup[] = [
   "US Tech Stocks","Crypto Assets","Index ETFs","High-Growth","Global Equities","Commodities",
 ];
-
-const PLAN_FEATURES: Record<string,{name:string;price:string;features:string[]}> = {
-  analyst: { name: "Analyst", price: "$10/mo",    features: ["5 AI trades/day","Basic signals","Email alerts","1 asset class"] },
-  genius:  { name: "Genius",  price: "$29.99/mo", features: ["Unlimited AI trades","Advanced signals","All asset classes","Priority support","SMS alerts"] },
-  elite:   { name: "Elite",   price: "$49.99/mo", features: ["Everything in Genius","Dedicated AI model","Custom strategies","White-glove support","API access"] },
-};
 
 const THRESHOLD_INFO: Record<number,{label:string;desc:string;color:string}> = {
   70: { label: "Aggressive",    desc: "More trades, higher activity, wider signal net",       color: "text-yellow-400" },
@@ -47,11 +42,9 @@ function SettingsContent() {
 
   // Profile
   const [profile, setProfile] = useState({ name: "", email: "", phone: "(480) 798-0753" });
-  const [plan,    setPlan]     = useState("genius");
 
   // Notifications
   const [notifs, setNotifs] = useState({ email: true, sms: false, push: false, ai: true, trades: true, news: false });
-
 
   // AI Bot Config
   const [confidence,   setConfidence]   = useState<number>(80);
@@ -62,21 +55,25 @@ function SettingsContent() {
   const [stopLoss,     setStopLoss]     = useState(0);
   const [botActive,    setBotActive]    = useState(true);
 
-  // Alpaca broker connection
-  const [alpacaKey,      setAlpacaKey]      = useState("");
-  const [alpacaSecret,   setAlpacaSecret]   = useState("");
-  const [alpacaPaper,    setAlpacaPaper]    = useState(true);
-  const [showKey,        setShowKey]        = useState(false);
-  const [showSecret,     setShowSecret]     = useState(false);
-  const [brokerStatus,   setBrokerStatus]   = useState<"idle"|"testing"|"connected"|"error">("idle");
-  const [brokerSaved,    setBrokerSaved]    = useState(false);
-  const [brokerPortfolio,setBrokerPortfolio]= useState<{value:number;cash:number;buyingPower:number}|null>(null);
+  // Portfolio stats for Account section
+  const [portfolioValue, setPortfolioValue] = useState(0);
+  const [portfolioCash,  setPortfolioCash]  = useState(0);
+  const [resetConfirm,   setResetConfirm]   = useState(false);
+
+  // Alpaca connection
+  const [alpacaKey,    setAlpacaKey]    = useState("");
+  const [alpacaSecret, setAlpacaSecret] = useState("");
+  const [alpacaPaper,  setAlpacaPaper]  = useState(true);
+  const [showKey,      setShowKey]      = useState(false);
+  const [showSecret,   setShowSecret]   = useState(false);
+  const [connStatus,   setConnStatus]   = useState<"idle"|"testing"|"connected"|"error">("idle");
+  const [connData,     setConnData]     = useState<{value:number;cash:number;buyingPower:number}|null>(null);
+  const [keySaved,     setKeySaved]     = useState(false);
 
   useEffect(() => {
     const user = getUser();
     if (user) {
       setProfile(p => ({ ...p, name: user.name || "", email: user.email || "" }));
-      setPlan((user as any).plan || "genius");
     }
     const cfg = getBotConfig();
     setConfidence(cfg.confidenceThreshold);
@@ -89,6 +86,9 @@ function SettingsContent() {
     if (cfg.updatedAt) {
       setLastSaved(new Date(cfg.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
     }
+    const p = loadPaperPortfolio();
+    setPortfolioValue(p.cash + Object.values(p.positions).reduce((s, pos) => s + pos.shares * pos.avgEntry, 0));
+    setPortfolioCash(p.cash);
     // Load saved Alpaca keys
     setAlpacaKey(localStorage.getItem("ggai_alpaca_key") ?? "");
     setAlpacaSecret(localStorage.getItem("ggai_alpaca_secret") ?? "");
@@ -133,19 +133,19 @@ function SettingsContent() {
     setTimeout(() => setSaved(false), 2500);
   };
 
-  const handleSaveBroker = () => {
+  const handleSaveKeys = () => {
     localStorage.setItem("ggai_alpaca_key",    alpacaKey.trim());
     localStorage.setItem("ggai_alpaca_secret", alpacaSecret.trim());
     localStorage.setItem("ggai_alpaca_paper",  String(alpacaPaper));
-    setBrokerSaved(true);
-    setBrokerStatus("idle");
-    setBrokerPortfolio(null);
-    setTimeout(() => setBrokerSaved(false), 3000);
+    setKeySaved(true);
+    setConnStatus("idle");
+    setConnData(null);
+    setTimeout(() => setKeySaved(false), 3000);
   };
 
-  const handleTestBroker = async () => {
+  const handleTestConnection = async () => {
     if (!alpacaKey || !alpacaSecret) return;
-    setBrokerStatus("testing");
+    setConnStatus("testing");
     try {
       const res  = await fetch("/api/bot/status", {
         headers: {
@@ -156,18 +156,32 @@ function SettingsContent() {
       });
       const data = await res.json();
       if (data.connected) {
-        setBrokerStatus("connected");
-        setBrokerPortfolio({
-          value:       data.portfolio_value,
-          cash:        data.cash,
-          buyingPower: data.buying_power,
-        });
+        setConnStatus("connected");
+        setConnData({ value: data.portfolio_value, cash: data.cash, buyingPower: data.buying_power });
       } else {
-        setBrokerStatus("error");
+        setConnStatus("error");
       }
     } catch {
-      setBrokerStatus("error");
+      setConnStatus("error");
     }
+  };
+
+  const handleDisconnect = () => {
+    localStorage.removeItem("ggai_alpaca_key");
+    localStorage.removeItem("ggai_alpaca_secret");
+    setAlpacaKey("");
+    setAlpacaSecret("");
+    setConnStatus("idle");
+    setConnData(null);
+  };
+
+  const handleReset = () => {
+    if (!resetConfirm) { setResetConfirm(true); return; }
+    resetPaperPortfolio();
+    const p = loadPaperPortfolio();
+    setPortfolioValue(p.cash);
+    setPortfolioCash(p.cash);
+    setResetConfirm(false);
   };
 
   const [tradeMin, tradeMax] = estimateTradesPerWeek(confidence, universe);
@@ -176,15 +190,12 @@ function SettingsContent() {
   const threshInfo = THRESHOLD_INFO[confidence] ?? THRESHOLD_INFO[80];
 
   const SECTIONS = [
-    { id: "ai",           icon: Brain,      label: "AI Configuration" },
-    { id: "paper",        icon: Bot,        label: "Account" },
-    { id: "profile",      icon: User,       label: "Profile" },
-    { id: "subscription", icon: CreditCard, label: "Subscription" },
-    { id: "notifications",icon: Bell,       label: "Notifications" },
-    { id: "security",     icon: Shield,     label: "Security" },
+    { id: "ai",            icon: Brain,       label: "AI Configuration" },
+    { id: "account",       icon: Bot,         label: "Account" },
+    { id: "profile",       icon: User,        label: "Profile" },
+    { id: "notifications", icon: Bell,        label: "Notifications" },
+    { id: "security",      icon: Shield,      label: "Security" },
   ];
-
-  const currentPlan = PLAN_FEATURES[plan] || PLAN_FEATURES.genius;
 
   return (
     <div className="space-y-6">
@@ -215,7 +226,6 @@ function SettingsContent() {
             ))}
           </div>
 
-          {/* Bot status mini-card */}
           {section === "ai" && (
             <div className={`mt-3 genius-card rounded-xl p-3 border ${botActive ? "border-genius-green/25" : "border-genius-border"}`}>
               <div className="flex items-center justify-between mb-2">
@@ -244,8 +254,6 @@ function SettingsContent() {
           {/* ── AI CONFIGURATION ── */}
           {section === "ai" && (
             <div className="flex flex-col gap-4">
-
-              {/* Config editor */}
               <div className="genius-card rounded-xl p-6">
                 <div className="flex items-center justify-between mb-5">
                   <div className="flex items-center gap-2">
@@ -411,7 +419,6 @@ function SettingsContent() {
                   </div>
                 </div>
 
-                {/* Save button */}
                 <div className="mt-6 flex items-center gap-3">
                   <button
                     onClick={handleSaveAI}
@@ -443,10 +450,10 @@ function SettingsContent() {
                 </div>
                 <div className="grid grid-cols-4 gap-3 mb-4">
                   {[
-                    { label: "Symbols Monitored", value: String(totalSymbols),           sub: `across ${universe.length} groups`,        color: "text-genius-green" },
-                    { label: "Trades / Week",      value: `${tradeMin}–${tradeMax}`,      sub: `at ${confidence}% confidence`,           color: "text-genius-green" },
-                    { label: "Next Rebalance",     value: nextRebalance,                  sub: frequency,                                color: "text-genius-muted" },
-                    { label: "Max Positions",      value: String(maxPositions),           sub: autoCompound ? "auto-compound on" : "compounding off", color: "text-genius-green" },
+                    { label: "Symbols Monitored", value: String(totalSymbols),      sub: `across ${universe.length} groups`,        color: "text-genius-green" },
+                    { label: "Trades / Week",      value: `${tradeMin}–${tradeMax}`, sub: `at ${confidence}% confidence`,           color: "text-genius-green" },
+                    { label: "Next Rebalance",     value: nextRebalance,             sub: frequency,                                color: "text-genius-muted" },
+                    { label: "Max Positions",      value: String(maxPositions),      sub: autoCompound ? "auto-compound on" : "compounding off", color: "text-genius-green" },
                   ].map(m => (
                     <div key={m.label} className="bg-genius-black rounded-xl p-3 border border-genius-border text-center">
                       <p className="text-xs text-genius-muted font-mono mb-1">{m.label}</p>
@@ -455,8 +462,6 @@ function SettingsContent() {
                     </div>
                   ))}
                 </div>
-
-                {/* Active symbol tags */}
                 <div>
                   <p className="text-xs text-genius-muted font-mono mb-2">ACTIVE TRADING UNIVERSE</p>
                   <div className="flex flex-wrap gap-1.5">
@@ -468,47 +473,48 @@ function SettingsContent() {
                   </div>
                 </div>
               </div>
-
-              {/* Reset wizard */}
-              <div className="genius-card rounded-xl p-4 border border-genius-green/10">
-                <div className="flex items-center gap-2 mb-2">
-                  <Zap size={14} className="text-genius-green" />
-                  <h3 className="font-bold text-white text-sm">Re-run Setup Wizard</h3>
-                </div>
-                <p className="text-xs text-genius-muted mb-3">Redo your full AI onboarding configuration from scratch.</p>
-                <button
-                  onClick={() => { window.location.href = "/onboarding"; }}
-                  className="flex items-center gap-2 text-sm text-genius-green font-semibold hover:underline"
-                >
-                  Launch Onboarding Wizard <ExternalLink size={12} />
-                </button>
-              </div>
             </div>
           )}
 
           {/* ── ACCOUNT ── */}
-          {section === "paper" && (
+          {section === "account" && (
             <div className="flex flex-col gap-4">
 
-              {/* Connect Live Trading */}
-              <div className="genius-card rounded-xl p-6 border border-genius-green/20">
+              {/* Alpaca connection card */}
+              <div className={`genius-card rounded-xl p-6 border ${connStatus === "connected" ? "border-genius-green/40" : "border-genius-border"}`}>
                 <div className="flex items-center gap-2 mb-1">
-                  <Link2 size={16} className="text-genius-green" />
-                  <h2 className="font-bold text-white">Connect Live Trading</h2>
-                  {brokerStatus === "connected" && (
-                    <span className="ml-auto flex items-center gap-1 text-xs font-mono font-bold text-genius-green">
-                      <Wifi size={12} /> CONNECTED
+                  <Bot size={16} className="text-genius-green" />
+                  <h2 className="font-bold text-white">Trading Account</h2>
+                  {connStatus === "connected" && (
+                    <span className="ml-auto flex items-center gap-1.5 text-xs font-mono font-bold text-genius-green">
+                      <Wifi size={12} /> CONNECTED {alpacaPaper ? "· PAPER" : "· LIVE"}
                     </span>
                   )}
-                  {brokerStatus === "error" && (
-                    <span className="ml-auto flex items-center gap-1 text-xs font-mono font-bold text-red-400">
+                  {connStatus === "error" && (
+                    <span className="ml-auto flex items-center gap-1.5 text-xs font-mono font-bold text-red-400">
                       <WifiOff size={12} /> CONNECTION FAILED
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-genius-muted mb-5 leading-relaxed">
-                  Enter your Alpaca API keys to enable real trade execution. Keys are stored locally — never sent to our servers.
+                <p className="text-xs text-genius-muted mb-5">
+                  Connect your Alpaca account so the AI bot can trade your real funds automatically. Keys are stored only on your device.
                 </p>
+
+                {/* Connected portfolio preview */}
+                {connStatus === "connected" && connData && (
+                  <div className="grid grid-cols-3 gap-3 mb-5">
+                    {[
+                      { label: "Portfolio Value", value: `$${connData.value.toLocaleString("en-US",{minimumFractionDigits:2})}` },
+                      { label: "Cash",            value: `$${connData.cash.toLocaleString("en-US",{minimumFractionDigits:2})}` },
+                      { label: "Buying Power",    value: `$${connData.buyingPower.toLocaleString("en-US",{minimumFractionDigits:2})}` },
+                    ].map(m => (
+                      <div key={m.label} className="bg-genius-black rounded-xl p-3 border border-genius-green/20 text-center">
+                        <p className="text-xs text-genius-muted font-mono mb-1">{m.label}</p>
+                        <p className="font-black text-sm text-genius-green">{m.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 <div className="flex flex-col gap-4">
                   {/* API Key */}
@@ -522,11 +528,8 @@ function SettingsContent() {
                         placeholder="PKXXXXXXXXXXXXXXXX"
                         className="w-full bg-genius-black border border-genius-border rounded-lg px-3 py-2.5 pr-10 text-white text-sm font-mono focus:outline-none focus:border-genius-green transition-colors"
                       />
-                      <button
-                        type="button"
-                        onClick={() => setShowKey(v => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-genius-muted hover:text-white transition-colors"
-                      >
+                      <button type="button" onClick={() => setShowKey(v => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-genius-muted hover:text-white transition-colors">
                         {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
                       </button>
                     </div>
@@ -543,11 +546,8 @@ function SettingsContent() {
                         placeholder="••••••••••••••••••••••••••••••••"
                         className="w-full bg-genius-black border border-genius-border rounded-lg px-3 py-2.5 pr-10 text-white text-sm font-mono focus:outline-none focus:border-genius-green transition-colors"
                       />
-                      <button
-                        type="button"
-                        onClick={() => setShowSecret(v => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-genius-muted hover:text-white transition-colors"
-                      >
+                      <button type="button" onClick={() => setShowSecret(v => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-genius-muted hover:text-white transition-colors">
                         {showSecret ? <EyeOff size={14} /> : <Eye size={14} />}
                       </button>
                     </div>
@@ -568,92 +568,100 @@ function SettingsContent() {
                   </div>
                   {!alpacaPaper && (
                     <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-400 font-mono">
-                      <AlertTriangle size={12} /> LIVE MODE — real funds will be traded. Use with caution.
+                      <AlertTriangle size={12} /> LIVE MODE — real funds will be traded. Confirm before running bot.
                     </div>
                   )}
 
-                  {/* Portfolio preview on successful connection */}
-                  {brokerStatus === "connected" && brokerPortfolio && (
-                    <div className="grid grid-cols-3 gap-3">
-                      {[
-                        { label: "Portfolio Value", value: `$${brokerPortfolio.value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
-                        { label: "Cash",            value: `$${brokerPortfolio.cash.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
-                        { label: "Buying Power",    value: `$${brokerPortfolio.buyingPower.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
-                      ].map(m => (
-                        <div key={m.label} className="bg-genius-black rounded-xl p-3 border border-genius-green/20 text-center">
-                          <p className="text-xs text-genius-muted font-mono mb-1">{m.label}</p>
-                          <p className="font-black text-sm text-genius-green">{m.value}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Action buttons */}
-                  <div className="flex gap-3 pt-1">
+                  {/* Actions */}
+                  <div className="flex gap-3 flex-wrap">
                     <button
-                      onClick={handleSaveBroker}
+                      onClick={handleSaveKeys}
                       className="px-5 py-2.5 rounded-xl btn-genius text-sm font-black flex items-center gap-2"
                     >
-                      {brokerSaved ? <><CheckCircle size={14} /> Saved!</> : <><Lock size={14} /> Save Keys</>}
+                      {keySaved ? <><CheckCircle size={14} /> Saved!</> : <><Lock size={14} /> Save Keys</>}
                     </button>
                     <button
-                      onClick={handleTestBroker}
-                      disabled={!alpacaKey || !alpacaSecret || brokerStatus === "testing"}
+                      onClick={handleTestConnection}
+                      disabled={!alpacaKey || !alpacaSecret || connStatus === "testing"}
                       className="px-5 py-2.5 rounded-xl border border-genius-green/40 text-genius-green text-sm font-bold hover:bg-genius-green/10 transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      {brokerStatus === "testing" ? (
-                        <><RefreshCw size={14} className="animate-spin" /> Testing...</>
-                      ) : brokerStatus === "connected" ? (
+                      {connStatus === "testing" ? (
+                        <><RefreshCw size={14} className="animate-spin" /> Testing…</>
+                      ) : connStatus === "connected" ? (
                         <><Wifi size={14} /> Connected</>
                       ) : (
                         <><Activity size={14} /> Test Connection</>
                       )}
                     </button>
+                    {(alpacaKey || connStatus === "connected") && (
+                      <button
+                        onClick={handleDisconnect}
+                        className="px-5 py-2.5 rounded-xl border border-red-500/30 text-red-400 text-sm font-bold hover:bg-red-500/10 transition-colors"
+                      >
+                        Disconnect
+                      </button>
+                    )}
                   </div>
                   <p className="text-xs text-genius-muted">
                     Get your API keys at{" "}
-                    <a href="https://app.alpaca.markets/paper-trading/overview" target="_blank" rel="noopener noreferrer" className="text-genius-green hover:underline">
-                      app.alpaca.markets <ExternalLink size={10} className="inline" />
+                    <a href="https://app.alpaca.markets" target="_blank" rel="noopener noreferrer" className="text-genius-green hover:underline">
+                      app.alpaca.markets ↗
                     </a>
+                    {" "}· Keys never leave your device
                   </p>
                 </div>
               </div>
 
-              {/* Trading Account info */}
-              <div className="genius-card rounded-xl p-6 border border-genius-border">
-                <div className="flex items-center gap-2 mb-4">
-                  <Bot size={16} className="text-genius-green" />
-                  <h2 className="font-bold text-white">Trading Account</h2>
+              {/* How to fund / withdraw */}
+              <div className="genius-card rounded-xl p-5 border border-genius-border">
+                <div className="flex items-center gap-2 mb-3">
+                  <DollarSign size={14} className="text-genius-green" />
+                  <h3 className="font-bold text-white text-sm">Funding & Withdrawals</h3>
                 </div>
-                <div className="grid grid-cols-3 gap-4 mb-6">
-                  {[
-                    { icon: "⚡", label: "AI-Powered",        desc: "Signals generated from 10,000+ data points across markets, news, and on-chain activity." },
-                    { icon: "📈", label: "Real Market Prices", desc: "Every trade uses live market data for accurate execution." },
-                    { icon: "🔒", label: "Secure",             desc: "Your API keys stay on your device — never sent to our servers." },
-                  ].map(c => (
-                    <div key={c.label} className="bg-genius-black rounded-xl p-4 border border-genius-border text-center">
-                      <div className="text-2xl mb-2">{c.icon}</div>
-                      <p className="text-sm font-bold text-white mb-1">{c.label}</p>
-                      <p className="text-xs text-genius-muted">{c.desc}</p>
-                    </div>
-                  ))}
-                </div>
+                <p className="text-xs text-genius-muted leading-relaxed mb-3">
+                  Deposit and withdraw real funds directly through your Alpaca account. Alpaca supports instant ACH transfers, wire transfers, and connects to most major banks.
+                </p>
                 <div className="flex gap-3">
-                  <a href="/dashboard"
-                    className="px-5 py-2.5 rounded-xl btn-genius text-sm font-black flex items-center gap-2">
-                    <TrendingUp size={14} /> View Portfolio
+                  <a
+                    href="https://app.alpaca.markets/paper-trading/overview"
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg btn-genius text-sm font-bold"
+                  >
+                    <TrendingUp size={13} /> Fund Account ↗
+                  </a>
+                  <a
+                    href="https://app.alpaca.markets/paper-trading/overview"
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg border border-genius-green/40 text-genius-green text-sm font-bold hover:bg-genius-green/10 transition-colors"
+                  >
+                    Withdraw ↗
                   </a>
                 </div>
               </div>
 
-              <div className="genius-card rounded-xl p-5 border border-genius-border">
-                <div className="flex items-center gap-2 mb-3">
-                  <Lock size={13} className="text-genius-green" />
-                  <h3 className="font-bold text-white text-sm">Your Data is Private</h3>
+              {/* Reset local portfolio */}
+              <div className="genius-card rounded-xl p-5 border border-red-500/20">
+                <div className="flex items-center gap-2 mb-1">
+                  <RotateCcw size={13} className="text-red-400" />
+                  <h3 className="font-bold text-white text-sm">Reset Local Portfolio</h3>
                 </div>
-                <p className="text-xs text-genius-muted leading-relaxed">
-                  Your API keys and portfolio data are stored only in your browser's local storage and never transmitted to our servers.
+                <p className="text-xs text-genius-muted mb-4">
+                  Clears local trade history and balance. Does not affect your real Alpaca account.
                 </p>
+                {resetConfirm ? (
+                  <div className="flex items-center gap-3">
+                    <button onClick={handleReset} className="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition-colors">
+                      Confirm Reset
+                    </button>
+                    <button onClick={() => setResetConfirm(false)} className="px-4 py-2 rounded-lg border border-genius-border text-genius-muted text-sm font-semibold hover:text-white transition-colors">
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={handleReset} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-500/30 text-red-400 text-sm font-semibold hover:bg-red-500/10 transition-colors">
+                    <RotateCcw size={13} /> Reset Local Portfolio
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -693,67 +701,6 @@ function SettingsContent() {
               <button onClick={handleSave} className="px-6 py-2.5 rounded-lg btn-genius text-sm font-bold flex items-center gap-2">
                 {saved ? <><CheckCircle size={14} /> Saved!</> : "Save Changes"}
               </button>
-            </div>
-          )}
-
-          {/* Subscription */}
-          {section === "subscription" && (
-            <div className="flex flex-col gap-4">
-              <div className="genius-card rounded-xl p-6 border border-genius-green/25">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-mono bg-genius-green/20 text-genius-green border border-genius-green/30 px-2 py-0.5 rounded font-bold">ACTIVE</span>
-                      <span className="text-xs text-genius-muted font-mono">Founding Member</span>
-                    </div>
-                    <h2 className="text-2xl font-black text-white">{currentPlan.name} Plan</h2>
-                    <p className="text-genius-green font-mono font-bold text-xl mt-1">{currentPlan.price}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-genius-muted font-mono">Next billing</p>
-                    <p className="text-white font-semibold">June 18, 2026</p>
-                    <p className="text-xs text-genius-muted mt-1">7-day free trial active</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2 mb-5">
-                  {currentPlan.features.map(f => (
-                    <div key={f} className="flex items-center gap-2">
-                      <CheckCircle size={13} className="text-genius-green flex-shrink-0" />
-                      <span className="text-sm text-genius-text">{f}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-3">
-                  <Link href="/dashboard/billing" className="px-5 py-2.5 rounded-lg border border-genius-green/40 text-genius-green text-sm font-bold hover:bg-genius-green/10 transition-colors">
-                    Manage Billing
-                  </Link>
-                  {plan !== "elite" && (
-                    <Link href="/upgrade" className="px-5 py-2.5 rounded-lg btn-genius text-sm font-bold">
-                      Upgrade to Elite
-                    </Link>
-                  )}
-                </div>
-              </div>
-              <div className="genius-card rounded-xl p-5">
-                <h3 className="font-bold text-white mb-3">Usage This Month</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  {[
-                    { label: "AI Trades Executed", value: "47",  limit: "∞",   pct: 47 },
-                    { label: "API Calls",          value: "312", limit: "5,000", pct: 6 },
-                    { label: "Alerts Triggered",   value: "18",  limit: "∞",   pct: 18 },
-                  ].map(u => (
-                    <div key={u.label}>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="text-genius-muted font-mono">{u.label}</span>
-                        <span className="text-white font-mono font-bold">{u.value}<span className="text-genius-muted">/{u.limit}</span></span>
-                      </div>
-                      <div className="w-full h-1.5 bg-genius-border rounded-full">
-                        <div className="h-full bg-genius-green rounded-full" style={{width:`${Math.min(u.pct,100)}%`}} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
           )}
 
@@ -818,7 +765,7 @@ function SettingsContent() {
                 <h3 className="font-bold text-white mb-1">Danger Zone</h3>
                 <p className="text-xs text-genius-muted mb-4">Irreversible account actions</p>
                 <div className="flex flex-col gap-2">
-                  {["Cancel Subscription","Delete Account"].map(a => (
+                  {["Delete Account"].map(a => (
                     <button key={a} className="flex items-center justify-between p-3 rounded-lg border border-red-500/20 hover:bg-red-500/5 transition-colors">
                       <span className="text-sm text-red-400 font-semibold">{a}</span>
                       <ChevronRight size={14} className="text-red-400" />

@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAccount, getPositions, getOrders } from "@/lib/alpaca";
+import { getBotConfig } from "@/lib/bot-config";
 
 export async function GET(req: NextRequest) {
   const alpacaKey    = (req.headers.get("x-alpaca-key")    ?? "").trim();
   const alpacaSecret = (req.headers.get("x-alpaca-secret") ?? "").trim();
-  const alpacaPaper  = req.headers.get("x-alpaca-paper")   !== "false"; // default true
+  const alpacaPaper  = req.headers.get("x-alpaca-paper")   !== "false";
 
   const hasAlpaca = alpacaKey.length > 4 && alpacaSecret.length > 4;
 
   if (!hasAlpaca) {
+    const cfg = getBotConfig();
     return NextResponse.json({
-      mode:      "signals-only",
-      active:    true,
+      mode:      "local",
+      active:    cfg.botActive ?? true,
       connected: false,
-      message:   "AI trading engine active. Connect Alpaca keys for live trading.",
     });
   }
 
@@ -55,12 +56,11 @@ export async function GET(req: NextRequest) {
       })),
     });
   } catch (err: any) {
-    console.error("Alpaca status error:", err.message);
     return NextResponse.json({
       mode:      "error",
       active:    false,
       connected: false,
       error:     err.message,
-    }, { status: 200 }); // 200 so client can read the error body
+    });
   }
 }

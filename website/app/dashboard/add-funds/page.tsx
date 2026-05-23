@@ -4,32 +4,36 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  DollarSign, ArrowLeft, Zap, CheckCircle, TrendingUp, Brain,
+  DollarSign, ArrowLeft, Zap, CheckCircle, TrendingUp, Brain, RefreshCw, ExternalLink,
 } from "lucide-react";
-import { addVirtualFunds, loadPaperPortfolio } from "@/lib/paper-trading";
+import { useRealPortfolio } from "@/lib/hooks/useRealPortfolio";
+import { runAutoTrade } from "@/lib/auto-trade";
 
 const QUICK_AMOUNTS = [100, 500, 1000, 2500, 5000, 10000];
 
 export default function AddFundsPage() {
-  const router = useRouter();
-  const [amount,     setAmount]     = useState("");
-  const [step,       setStep]       = useState<"amount" | "success">("amount");
-  const [balance,    setBalance]    = useState(0);
-  const [deposited,  setDeposited]  = useState(0);
+  const router    = useRouter();
+  const portfolio = useRealPortfolio(30000);
 
-  useEffect(() => {
-    const p = loadPaperPortfolio();
-    setBalance(p.cash);
-    setDeposited(p.deposited);
-  }, []);
+  const [amount,         setAmount]         = useState("");
+  const [step,           setStep]           = useState<"amount" | "deploying" | "success">("amount");
+  const [deployMsg,      setDeployMsg]      = useState("");
+  const [tradesExecuted, setTradesExecuted] = useState(0);
 
-  const numAmount = parseFloat(amount) || 0;
+  const balance    = portfolio.equity;
+  const numAmount  = parseFloat(amount) || 0;
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (numAmount < 10) return;
-    const updated = addVirtualFunds(numAmount);
-    setBalance(updated.cash);
-    setDeposited(updated.deposited);
+    setStep("deploying");
+    setDeployMsg("AI is scanning markets and deploying your funds…");
+    const result = await runAutoTrade();
+    if (result.executed > 0) {
+      setTradesExecuted(result.executed);
+      setDeployMsg(`Deployed into ${result.executed} position${result.executed !== 1 ? "s" : ""}.`);
+    } else {
+      setDeployMsg("Bot will deploy on next signal above your confidence threshold.");
+    }
     setStep("success");
   };
 
@@ -45,21 +49,22 @@ export default function AddFundsPage() {
         </button>
         <div>
           <h1 className="text-2xl font-black text-white">Add Funds</h1>
-          <p className="text-xs text-genius-muted font-mono">
-            Deposit funds to your trading account
-          </p>
+          <p className="text-xs text-genius-muted font-mono">Deposit to your Alpaca account — bot deploys automatically</p>
         </div>
       </div>
 
       {/* Current balance */}
       <div className="genius-card rounded-xl p-4 flex items-center justify-between border border-genius-green/20">
         <div>
-          <p className="text-xs text-genius-muted font-mono mb-0.5">CURRENT BALANCE</p>
+          <p className="text-xs text-genius-muted font-mono mb-0.5">LIVE ALPACA BALANCE</p>
           <p className="text-2xl font-black text-genius-green font-mono">
-            ${balance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {portfolio.loading
+              ? <RefreshCw size={20} className="animate-spin" />
+              : `$${balance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            }
           </p>
           <p className="text-xs text-genius-muted font-mono">
-            ${deposited.toLocaleString("en-US", { minimumFractionDigits: 2 })} total deposited
+            {portfolio.connected ? "Connected · Live" : "Checking connection…"}
           </p>
         </div>
         <div className="w-12 h-12 rounded-xl bg-genius-green/15 border border-genius-green/30 flex items-center justify-center">
@@ -68,81 +73,66 @@ export default function AddFundsPage() {
       </div>
 
       {step === "amount" && (
-        <>
-          {/* Amount input */}
-          <div className="genius-card rounded-xl p-6">
-            <h2 className="font-bold text-white mb-4 flex items-center gap-2">
-              <DollarSign size={16} className="text-genius-green" /> Choose Amount
-            </h2>
-
-            <div className="relative mb-4">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-black text-genius-green">$</span>
-              <input
-                type="number"
-                min={10}
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
-                placeholder="0.00"
-                className="w-full bg-genius-black border border-genius-border rounded-xl pl-10 pr-4 py-4 text-3xl font-black text-white font-mono focus:outline-none focus:border-genius-green transition-colors"
-              />
+        <div className="flex flex-col gap-4">
+          <div className="genius-card rounded-xl p-6 border border-genius-green/20">
+            <div className="flex items-center gap-2 mb-1">
+              <CheckCircle size={16} className="text-genius-green" />
+              <h2 className="font-bold text-white">Alpaca Account Connected</h2>
             </div>
-
-            <div className="grid grid-cols-3 gap-2 mb-2">
-              {QUICK_AMOUNTS.map(q => (
-                <button
-                  key={q}
-                  onClick={() => setAmount(String(q))}
-                  className={`py-2.5 rounded-xl border text-sm font-bold font-mono transition-all ${
-                    numAmount === q
-                      ? "border-genius-green bg-genius-green/15 text-genius-green"
-                      : "border-genius-border text-genius-muted hover:text-white hover:border-genius-green/30"
-                  }`}
-                >
-                  ${q >= 1000 ? `${q / 1000}k` : q}
-                </button>
-              ))}
-            </div>
-
-            {numAmount > 0 && numAmount < 10 && (
-              <p className="text-xs text-red-400 font-mono mt-2">Minimum deposit is $10</p>
-            )}
-          </div>
-
-          {/* CTA */}
-          {numAmount >= 10 && (
-            <div className="genius-card rounded-xl p-5 border border-genius-green/20">
-              <div className="flex justify-between text-sm mb-4">
-                <span className="text-genius-muted">Adding to account</span>
-                <span className="text-genius-green font-black text-base font-mono">
-                  ${numAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-              <button
-                onClick={handleConfirm}
-                className="w-full py-3.5 rounded-xl btn-genius font-black text-base flex items-center justify-center gap-2"
+            <p className="text-xs text-genius-muted mb-6 leading-relaxed">
+              Your live Alpaca account is connected. All deposits and withdrawals go directly through Alpaca — ACH transfers, wire transfers, and instant bank connections.
+            </p>
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              <a
+                href="https://app.alpaca.markets/account/banking"
+                target="_blank" rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 py-3.5 rounded-xl btn-genius font-black text-sm"
               >
-                <Zap size={16} /> Add ${numAmount.toLocaleString()} to Account
-              </button>
+                <DollarSign size={15} /> Deposit Funds ↗
+              </a>
+              <a
+                href="https://app.alpaca.markets/account/banking"
+                target="_blank" rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 py-3.5 rounded-xl border border-genius-green/40 text-genius-green font-black text-sm hover:bg-genius-green/10 transition-colors"
+              >
+                <ExternalLink size={15} /> Withdraw ↗
+              </a>
             </div>
-          )}
-
-          {/* Info strip */}
-          <div className="genius-card rounded-xl p-5 border border-genius-border">
-            <div className="grid grid-cols-3 gap-4 text-center text-xs text-genius-muted">
+            <div className="flex flex-col gap-2">
               {[
-                { icon: "⚡", title: "Instant Deposit", sub: "Funds are added instantly and the AI begins investing right away." },
-                { icon: "📈", title: "Live Prices",     sub: "Every trade uses live market data for accurate execution." },
-                { icon: "🤖", title: "AI Deploys It",   sub: "The bot auto-invests based on your confidence settings." },
+                { icon: "⚡", label: "Instant ACH",    desc: "Most deposits clear same-day or next morning." },
+                { icon: "🏦", label: "Bank / Wire",     desc: "Connect your bank account directly in Alpaca." },
+                { icon: "🤖", label: "AI Auto-Deploys", desc: "Once funds clear, the bot starts trading immediately." },
               ].map(c => (
-                <div key={c.title}>
-                  <div className="text-2xl mb-2">{c.icon}</div>
-                  <p className="font-bold text-genius-text mb-1">{c.title}</p>
-                  <p>{c.sub}</p>
+                <div key={c.label} className="flex items-center gap-3 p-3 rounded-lg bg-genius-black border border-genius-border">
+                  <span className="text-xl">{c.icon}</span>
+                  <div>
+                    <p className="text-sm font-bold text-white">{c.label}</p>
+                    <p className="text-xs text-genius-muted">{c.desc}</p>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
-        </>
+
+          <div className="genius-card rounded-xl p-4 border border-genius-border">
+            <p className="text-xs text-genius-muted text-center">
+              Manage all transactions at{" "}
+              <a href="https://app.alpaca.markets" target="_blank" rel="noopener noreferrer"
+                className="text-genius-green hover:underline font-semibold">
+                app.alpaca.markets ↗
+              </a>
+            </p>
+          </div>
+        </div>
+      )}
+
+      {step === "deploying" && (
+        <div className="genius-card rounded-xl p-10 text-center">
+          <RefreshCw size={48} className="text-genius-green animate-spin mx-auto mb-6" />
+          <h2 className="text-2xl font-black text-white mb-2">Deploying Funds</h2>
+          <p className="text-genius-muted text-sm">{deployMsg}</p>
+        </div>
       )}
 
       {step === "success" && (
@@ -150,34 +140,17 @@ export default function AddFundsPage() {
           <div className="w-20 h-20 rounded-full bg-genius-green/15 border-2 border-genius-green/40 flex items-center justify-center mx-auto mb-6">
             <CheckCircle size={36} className="text-genius-green" />
           </div>
-          <h2 className="text-3xl font-black text-white mb-2">Funds Added!</h2>
-          <p className="text-genius-muted mb-1">
-            <span className="text-genius-green font-black text-xl">
-              ${numAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </span>{" "}
-            added to your account.
-          </p>
-          <p className="text-xs text-genius-muted font-mono mb-2">
-            New balance:{" "}
-            <span className="text-genius-green font-bold">
-              ${balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </span>
-          </p>
-          <p className="text-xs text-genius-muted font-mono mb-8">
-            Funds added to your account instantly. The AI bot will start investing right away.
-          </p>
-
+          <h2 className="text-3xl font-black text-white mb-2">Done!</h2>
+          <p className="text-genius-muted mb-4 text-sm">{deployMsg}</p>
           <div className="flex gap-3">
             <button
-              onClick={() => { setStep("amount"); setAmount(""); }}
+              onClick={() => { setStep("amount"); setAmount(""); setTradesExecuted(0); }}
               className="flex-1 py-3 rounded-xl border border-genius-border text-genius-muted font-bold hover:text-white hover:border-genius-green/30 transition-colors text-sm"
             >
-              Add More
+              Back
             </button>
-            <Link
-              href="/dashboard"
-              className="flex-1 py-3 rounded-xl btn-genius font-black text-sm flex items-center justify-center gap-2"
-            >
+            <Link href="/dashboard"
+              className="flex-1 py-3 rounded-xl btn-genius font-black text-sm flex items-center justify-center gap-2">
               <TrendingUp size={14} /> View Dashboard
             </Link>
           </div>

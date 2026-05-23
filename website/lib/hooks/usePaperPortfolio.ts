@@ -26,70 +26,83 @@ export type PaperPortfolioState = {
   totalPl: number;
   totalPlPct: number;
   loading: boolean;
+  mode: "alpaca-live" | "alpaca-paper" | "local";
+  alpacaConnected: boolean;
 };
+
+function getAlpacaKeys() {
+  if (typeof window === "undefined") return { key: "", secret: "", paper: true };
+  return {
+    key:    localStorage.getItem("ggai_alpaca_key")    ?? "",
+    secret: localStorage.getItem("ggai_alpaca_secret") ?? "",
+    paper:  localStorage.getItem("ggai_alpaca_paper")  !== "false",
+  };
+}
 
 export function usePaperPortfolio(refreshMs = 30000) {
   const [state, setState] = useState<PaperPortfolioState>({
-    cash: 10000, deposited: 10000,
+    cash: 0, deposited: 0,
     positions: [], trades: [],
-    totalValue: 10000, totalPl: 0, totalPlPct: 0,
+    totalValue: 0, totalPl: 0, totalPlPct: 0,
     loading: true,
+    mode: "local",
+    alpacaConnected: false,
   });
 
   const refresh = useCallback(async () => {
-    // Check for Alpaca keys — if present, fetch real portfolio data
-    const alpacaKey    = typeof window !== "undefined" ? (localStorage.getItem("ggai_alpaca_key")    ?? "") : "";
-    const alpacaSecret = typeof window !== "undefined" ? (localStorage.getItem("ggai_alpaca_secret") ?? "") : "";
-    const alpacaPaper  = typeof window !== "undefined" ? (localStorage.getItem("ggai_alpaca_paper")  !== "false") : true;
-    const hasAlpaca    = alpacaKey.length > 4 && alpacaSecret.length > 4;
+    const { key, secret, paper } = getAlpacaKeys();
+    const hasAlpaca = key.length > 4 && secret.length > 4;
 
+    // ── Alpaca live/paper mode ────────────────────────────────────────────────
     if (hasAlpaca) {
       try {
         const res  = await fetch("/api/bot/status", {
           headers: {
-            "x-alpaca-key":    alpacaKey,
-            "x-alpaca-secret": alpacaSecret,
-            "x-alpaca-paper":  String(alpacaPaper),
+            "x-alpaca-key":    key,
+            "x-alpaca-secret": secret,
+            "x-alpaca-paper":  String(paper),
           },
         });
         const data = await res.json();
+
         if (data.connected) {
-          const alpacaPositions: LivePaperPosition[] = (data.positions ?? []).map((p: any) => {
-            const value = p.market_value;
-            const pl    = p.unrealized_pl;
-            const plPct = +(p.unrealized_plpc * 100).toFixed(2);
-            return {
-              sym:          p.symbol,
-              shares:       p.qty,
-              avgEntry:     p.avg_entry_price,
-              totalCost:    +(p.qty * p.avg_entry_price).toFixed(2),
-              currentPrice: p.current_price,
-              value,
-              pl,
-              plPct,
-            };
-          });
+          const alpacaPositions: LivePaperPosition[] = (data.positions ?? []).map((p: any) => ({
+            sym:          p.symbol,
+            shares:       p.qty,
+            avgEntry:     p.avg_entry_price,
+            totalCost:    +(p.qty * p.avg_entry_price).toFixed(2),
+            currentPrice: p.current_price,
+            value:        p.market_value,
+            pl:           p.unrealized_pl,
+            plPct:        +(p.unrealized_plpc * 100).toFixed(2),
+          }));
+
           const posValue   = alpacaPositions.reduce((s, p) => s + p.value, 0);
           const totalValue = +(data.cash + posValue).toFixed(2);
-          const deposited  = totalValue; // Alpaca doesn't track deposits — use current value as baseline
+          const equity     = data.equity ?? totalValue;
+          const deposited  = equity; // baseline = current equity
+          const totalPl    = +(equity - data.portfolio_value).toFixed(2);
+
           setState({
-            cash:       data.cash,
+            cash:            data.cash,
             deposited,
-            positions:  alpacaPositions,
-            trades:     [],
-            totalValue,
-            totalPl:    data.equity - data.portfolio_value, // unrealized total
-            totalPlPct: 0,
-            loading:    false,
+            positions:       alpacaPositions,
+            trades:          [],
+            totalValue:      parseFloat(data.portfolio_value) || totalValue,
+            totalPl,
+            totalPlPct:      0,
+            loading:         false,
+            mode:            paper ? "alpaca-paper" : "alpaca-live",
+            alpacaConnected: true,
           });
           return;
         }
       } catch {
-        // fall through to paper portfolio
+        // fall through to local mode
       }
     }
 
-    // Paper portfolio fallback
+    // ── Local paper portfolio ─────────────────────────────────────────────────
     const portfolio = loadPaperPortfolio();
     const syms = Object.keys(portfolio.positions);
     let prices: Record<string, { price: number }> = {};
@@ -104,24 +117,26 @@ export function usePaperPortfolio(refreshMs = 30000) {
 
     const livePositions: LivePaperPosition[] = Object.values(portfolio.positions).map(pos => {
       const currentPrice = prices[pos.sym]?.price ?? pos.avgEntry;
-      const value = +(pos.shares * currentPrice).toFixed(2);
-      const pl = +(value - pos.totalCost).toFixed(2);
-      const plPct = pos.totalCost > 0 ? +((pl / pos.totalCost) * 100).toFixed(2) : 0;
+      const value  = +(pos.shares * currentPrice).toFixed(2);
+      const pl     = +(value - pos.totalCost).toFixed(2);
+      const plPct  = pos.totalCost > 0 ? +((pl / pos.totalCost) * 100).toFixed(2) : 0;
       return { ...pos, currentPrice, value, pl, plPct };
     });
 
-    const posValue = livePositions.reduce((s, p) => s + p.value, 0);
+    const posValue   = livePositions.reduce((s, p) => s + p.value, 0);
     const totalValue = +(portfolio.cash + posValue).toFixed(2);
-    const totalPl = +(totalValue - portfolio.deposited).toFixed(2);
+    const totalPl    = +(totalValue - portfolio.deposited).toFixed(2);
     const totalPlPct = portfolio.deposited > 0 ? +((totalPl / portfolio.deposited) * 100).toFixed(2) : 0;
 
     setState({
-      cash: portfolio.cash,
-      deposited: portfolio.deposited,
-      positions: livePositions,
-      trades: portfolio.trades,
+      cash:            portfolio.cash,
+      deposited:       portfolio.deposited,
+      positions:       livePositions,
+      trades:          portfolio.trades,
       totalValue, totalPl, totalPlPct,
-      loading: false,
+      loading:         false,
+      mode:            "local",
+      alpacaConnected: false,
     });
   }, []);
 
