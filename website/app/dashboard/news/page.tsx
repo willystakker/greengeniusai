@@ -39,7 +39,8 @@ export default function NewsPage() {
   const portfolioSyms = portfolio.positions.map(p => p.sym);
 
   // Combine portfolio symbols with market standards, dedupe
-  const allSyms = [...new Set([...portfolioSyms, ...MARKET_SYMS])];
+  const allSymsSet = new Set([...portfolioSyms, ...MARKET_SYMS]);
+  const allSyms    = Array.from(allSymsSet);
 
   const scanNews = useCallback(async () => {
     if (allSyms.length === 0) return;
