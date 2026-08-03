@@ -1,0 +1,14 @@
+{
+  "name": "greengeniusai-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server exposing the GreenGeniusAI codebase — FastAPI routes, AI trading engine scheduler jobs, Next.js dashboard routes, env reference, and code search — as tools for AI assistants.",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.24.1"
+  }
+}
